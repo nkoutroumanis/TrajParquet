@@ -1,0 +1,8 @@
+
+
+mvn clean && mvn -Dmaven.test.skip=true package && scp target/Spatial-NoDB-1.0-SNAPSHOT.jar lab:~/Desktop/executables/ &&
+mvn dependency:copy-dependencies -DoutputDirectory=lib &&
+scp -r lib/ lab:~/Desktop/
+
+ mvn clean && mvn -Dmaven.test.skip=true package &&
+ mvn clean && mvn -Dmaven.test.skip=true install
