@@ -52,8 +52,8 @@ public class DataLoading {
         final double maxLat = hilbert.getDouble("maxLat");
         final long maxTime = hilbert.getLong("maxTime");
 
-        final long maxOrdinates = 1L << bits;
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final long maxOrdinates = hilbertCurve.maxOrdinate();
 
         Job job = Job.getInstance();
 
@@ -100,8 +100,8 @@ public class DataLoading {
                     double minLatitude = Double.MAX_VALUE;
                     long minTimestamp = Long.MAX_VALUE;
 
-                    double maxLongitude = Double.MIN_VALUE;
-                    double maxLatitude = Double.MIN_VALUE;
+                    double maxLongitude = -Double.MAX_VALUE;
+                    double maxLatitude = -Double.MAX_VALUE;
                     long maxTimestamp = Long.MIN_VALUE;
 
                     for (int j = 0; j < currentPart.size(); j++) {
@@ -144,8 +144,8 @@ public class DataLoading {
                 double minLatitude = Double.MAX_VALUE;
                 long minTimestamp = Long.MAX_VALUE;
 
-                double maxLongitude = Double.MIN_VALUE;
-                double maxLatitude = Double.MIN_VALUE;
+                double maxLongitude = -Double.MAX_VALUE;
+                double maxLatitude = -Double.MAX_VALUE;
                 long maxTimestamp = Long.MIN_VALUE;
 
                 for (int j = 0; j < currentPart.size(); j++) {

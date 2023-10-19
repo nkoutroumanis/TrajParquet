@@ -1,11 +1,12 @@
-package gr.ds.unipi.spatialnodb.queries.segmentv8;
+package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv8.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv8.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv8.TrajectorySegmentReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
+import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
@@ -20,6 +21,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
@@ -64,16 +66,43 @@ public class RangeQueries {
             long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
-            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
+//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
 
-//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD.flatMapValues(f -> {
-//
-//                List<TrajectorySegment> trajectoryList = new ArrayList<>();
-//                List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
-//                long segment = 1;
-//
-//                SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
-//                for (int i = 0; i < spatioTemporalPoints.length - 1; i++) {
+            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD.flatMapValues(f -> {
+
+                List<TrajectorySegment> trajectoryList = new ArrayList<>();
+                List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
+                long segment = 1;
+
+                SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
+                for (int i = 0; i < spatioTemporalPoints.length - 1; i++) {
+
+                    Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp(),
+                            spatioTemporalPoints[i+1].getLongitude(), spatioTemporalPoints[i+1].getLatitude(),spatioTemporalPoints[i+1].getTimestamp()
+                            ,queryMinLongitude, queryMinLatitude, queryMinTimestamp, queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);
+
+                    if(stPoints.isPresent()){
+//                        if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()&& stPoints.get()[1].getT()== spatioTemporalPoints[i+1].getTimestamp()){
+//                            //both points are in query
+//                        }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
+//                            //first point of line is in query, second is outside query
+//                        }else if(stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
+//                            //second point of line is in query, first is outside query
+//                        }else{
+//                            //penetrates the query
+//                        }
+                        if (currentSpatioTemporalPoints.size() == 0) {
+                            currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
+                            currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
+                            } else {
+                                currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
+                            }
+                    }else{
+                        if (currentSpatioTemporalPoints.size() > 0) {
+                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                            currentSpatioTemporalPoints.clear();
+                        }
+                    }
 //                    //if intersected in time
 //                    if (spatioTemporalPoints[i + 1].getTimestamp() >= queryMinTimestamp && spatioTemporalPoints[i].getTimestamp() <= queryMaxTimestamp) {
 //
@@ -101,7 +130,6 @@ public class RangeQueries {
 //                            } else {
 //                                currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 //                            }
-////                            System.out.println("HERE "+ spatioTemporalPoints[i].getLongitude()+" "+spatioTemporalPoints[i].getLatitude() +" "+spatioTemporalPoints[i+1].getLongitude() +" "+spatioTemporalPoints[i+1].getLatitude() +" Query "+ queryMinLongitude+" "+ queryMinLatitude+" "+queryMaxLongitude+" "+ queryMaxLatitude);
 //                        } else {//if the line does not intersect with the spatial part of the query
 //                            if (currentSpatioTemporalPoints.size() > 0) {
 //                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
@@ -109,59 +137,64 @@ public class RangeQueries {
 //                            }
 //                        }
 //                    }
-//
-//                }
-//                if (currentSpatioTemporalPoints.size() > 0) {
-//                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
-//                    currentSpatioTemporalPoints.clear();
-//                }
-//                return trajectoryList.iterator();
-//            })
-//            .groupBy(f->f._2.getObjectId())
-//            .flatMapToPair(f->{
-//
-//                List<TrajectorySegment> trSegments = new ArrayList<>();
-//                f._2.forEach(t->trSegments.add(t._2));
-//                trSegments.sort(Comparator.comparingLong(seg->seg.getSpatioTemporalPoints()[0].getTimestamp()));
-//
-//                List<Tuple2<Void, TrajectorySegment>> finalList = new ArrayList<>();
-//                List<TrajectorySegment> currentMerged = new ArrayList<>();
-//                currentMerged.add(trSegments.get(0));
-//
-//                int segmentNum = 0;
-//
-//                for (int i = 0; i < trSegments.size()-1; i++) {
-//                    SpatioTemporalPoint spatioTemporalPoint1 = trSegments.get(i).getSpatioTemporalPoints()[trSegments.get(i).getSpatioTemporalPoints().length-1];
-//                    SpatioTemporalPoint spatioTemporalPoint2 = trSegments.get(i+1).getSpatioTemporalPoints()[0];
-//
-//                    if(spatioTemporalPoint1.equals(spatioTemporalPoint2)){
-//                        currentMerged.add(trSegments.get(i+1));
-//                    }else{
-//                        //clean currentMerged and add to the final list
-//                        finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1, ++segmentNum, currentMerged)));
-//                        currentMerged.clear();
-//                        currentMerged.add(trSegments.get(i+1));
-//                    }
-//                }
-//
-//                //leftovers
-//                if(currentMerged.size()>0){
-//                    finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1,++segmentNum, currentMerged)));
-//                }
-//                return finalList.iterator();
-//            });
 
-            List<Tuple2<Void, TrajectorySegment>> trajs = pairRDDRangeQuery.collect();
+                }
+                if (currentSpatioTemporalPoints.size() > 0) {
+                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                    currentSpatioTemporalPoints.clear();
+                }
+                return trajectoryList.iterator();
+            })
+
+            .groupBy(f->f._2.getObjectId()).flatMapToPair(f->{
+
+                List<TrajectorySegment> trSegments = new ArrayList<>();
+                f._2.forEach(t->trSegments.add(t._2));
+                trSegments.sort(Comparator.comparingLong(seg->seg.getSpatioTemporalPoints()[0].getTimestamp()));
+
+                List<Tuple2<Void, TrajectorySegment>> finalList = new ArrayList<>();
+                List<TrajectorySegment> currentMerged = new ArrayList<>();
+                currentMerged.add(trSegments.get(0));
+
+                int segmentNum = 0;
+
+                for (int i = 0; i < trSegments.size()-1; i++) {
+                    SpatioTemporalPoint spatioTemporalPoint1 = trSegments.get(i).getSpatioTemporalPoints()[trSegments.get(i).getSpatioTemporalPoints().length-1];
+                    SpatioTemporalPoint spatioTemporalPoint2 = trSegments.get(i+1).getSpatioTemporalPoints()[0];
+
+                    if(spatioTemporalPoint1.equals(spatioTemporalPoint2)){
+                        currentMerged.add(trSegments.get(i+1));
+                    }else{
+                        //clean currentMerged and add to the final list
+                        finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1, ++segmentNum, currentMerged)));
+                        currentMerged.clear();
+                        currentMerged.add(trSegments.get(i+1));
+                    }
+                }
+
+                //leftovers
+                if(currentMerged.size()>0){
+                    finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1,++segmentNum, currentMerged)));
+                }
+                return finalList.iterator();
+            });
+
+            List<Tuple2<Void,TrajectorySegment>> trajs = pairRDDRangeQuery.collect();
             long num = trajs.size();
 
             long numOfPoints = 0;
             for (Tuple2<Void, TrajectorySegment> voidTrajectoryTuple2 : trajs) {
                 numOfPoints = numOfPoints + voidTrajectoryTuple2._2.getSpatioTemporalPoints().length;
             }
+
+//            trajs.forEach(tr->{
+//                System.out.println(tr._2);
+//            });
+//            System.out.println("END");
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
 
-            bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+DataPage.counter);
+            bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter);
             DataPage.counter = 0;
             bw.newLine();
         }
@@ -169,7 +202,6 @@ public class RangeQueries {
             times.remove(0);
         }
         bw.write(times.stream().mapToLong(Long::longValue).average().getAsDouble()+"");
-
         bw.close();
         br.close();
 

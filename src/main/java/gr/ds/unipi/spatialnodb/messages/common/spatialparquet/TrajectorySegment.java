@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.segmentv6;
+package gr.ds.unipi.spatialnodb.messages.common.spatialparquet;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -18,19 +18,6 @@ public class TrajectorySegment implements Serializable {
     private final double maxLongitude;
     private final double maxLatitude;
     private final long maxTimestamp;
-
-//    public TrajectorySegment(String objectId, long trajectoryId, long segment, SpatioTemporalPoint[] spatioTemporalPoints, double minLongitude, double minLatitude, long minTimestamp, double maxLongitude, double maxLatitude, long maxTimestamp) {
-//        this.objectId = objectId;
-//        this.trajectoryId = trajectoryId;
-//        this.segment = segment;
-//        this.spatioTemporalPoints = spatioTemporalPoints;
-//        this.minLongitude = minLongitude;
-//        this.minLatitude = minLatitude;
-//        this.minTimestamp = minTimestamp;
-//        this.maxLongitude = maxLongitude;
-//        this.maxLatitude = maxLatitude;
-//        this.maxTimestamp = maxTimestamp;
-//    }
 
     public TrajectorySegment(String objectId, long segment, SpatioTemporalPoint[] spatioTemporalPoints, double minLongitude, double minLatitude, long minTimestamp, double maxLongitude, double maxLatitude, long maxTimestamp) {
         this.objectId = objectId;
@@ -102,10 +89,6 @@ public class TrajectorySegment implements Serializable {
         return objectId;
     }
 
-//    public long getTrajectoryId() {
-//        return trajectoryId;
-//    }
-
     public long getSegment() {
         return segment;
     }
@@ -142,7 +125,6 @@ public class TrajectorySegment implements Serializable {
     public String toString() {
         return "TrajectorySegment{" +
                 "objectId='" + objectId + '\'' +
-//                ", trajectoryId=" + trajectoryId +
                 ", segment=" + segment +
                 ", spatioTemporalPoints=" + Arrays.toString(spatioTemporalPoints) +
                 ", minLongitude=" + minLongitude +

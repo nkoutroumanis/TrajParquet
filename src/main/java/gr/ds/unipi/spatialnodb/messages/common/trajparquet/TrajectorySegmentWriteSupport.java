@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.segmentv6;
+package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 
 //import fi.iki.yak.ts.compression.gorilla.ByteBufferBitOutput;
 //import fi.iki.yak.ts.compression.gorilla.Compressor;

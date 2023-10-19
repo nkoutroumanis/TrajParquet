@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.segmentv6;
+package gr.ds.unipi.spatialnodb.messages.common.spatialparquet;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.InitContext;

@@ -62,9 +62,11 @@ public class RangeQueries {
             FilterPredicate tAxis= and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
             ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
-
             long startTime = System.currentTimeMillis();
-            JavaPairRDD<Void, Trajectory> pairRDD = (JavaPairRDD<Void, Trajectory>) jsc.newAPIHadoopFile(parquetPath,ParquetInputFormat.class, Void.class, Trajectory.class,job.getConfiguration());//.flatMapValues(f->{
+
+            JavaPairRDD<Void, Trajectory> pairRDD = (JavaPairRDD<Void, Trajectory>) jsc.newAPIHadoopFile(parquetPath,ParquetInputFormat.class, Void.class, Trajectory.class,job.getConfiguration());
+//            JavaPairRDD<Void,Trajectory> pairRDDRangeQuery = pairRDD;
+
             JavaPairRDD<Void, Trajectory> pairRDDRangeQuery = (JavaPairRDD<Void, Trajectory>) pairRDD.flatMapValues(f->{
 
                 List<Trajectory> trajectoryList = new ArrayList<>();
@@ -107,13 +109,8 @@ public class RangeQueries {
                                 currentCoordinates.add(new Coordinate(coordinates[i+1].x,coordinates[i+1].y));
                                 currentTimestamps.add(f.getTimestamps()[i+1]);
                             }
-//                            System.out.println("HERE "+ coordinates[i].x+" "+coordinates[i].y +" "+coordinates[i+1].x +" "+coordinates[i+1].y +" Query "+ queryMinLongitude+" "+ queryMinLatitude+" "+queryMaxLongitude+" "+ queryMaxLatitude);
                         }else{//if the line does not intersect with the spatial part of the query
                             if (currentCoordinates.size() > 0) {
-//                                if(currentCoordinates.size()!=currentTimestamps.size()){
-//                                    throw new Exception("DIFF SIZE");
-//                                }
-
                                 trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                 currentCoordinates.clear();
                                 currentTimestamps.clear();
@@ -123,9 +120,6 @@ public class RangeQueries {
 
                 }
                 if (currentCoordinates.size() > 0) {
-//                    if(currentCoordinates.size()!=currentTimestamps.size()){
-//                        throw new Exception("DIFF SIZE");
-//                    }
                     trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                     currentCoordinates.clear();
                     currentTimestamps.clear();
@@ -172,7 +166,6 @@ public class RangeQueries {
             });
 
             List<Tuple2<Void, Trajectory>> trajs = pairRDDRangeQuery.collect();
-
             long num = trajs.size();
 
             long numOfPoints = 0;
@@ -192,7 +185,6 @@ public class RangeQueries {
             times.remove(0);
         }
         bw.write(times.stream().mapToLong(Long::longValue).average().getAsDouble()+"");
-
         bw.close();
         br.close();
     }

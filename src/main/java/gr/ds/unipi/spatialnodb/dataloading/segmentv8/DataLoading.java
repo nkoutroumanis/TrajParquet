@@ -51,10 +51,13 @@ public class DataLoading {
         final double maxLat = hilbert.getDouble("maxLat");
         final long maxTime = hilbert.getLong("maxTime");
 
-        final long maxOrdinates = 1L << bits;
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final long maxOrdinates = hilbertCurve.maxOrdinate();
 
         Job job = Job.getInstance();
+
+//        ParquetOutputFormat.setPageSize(job, 4096);
+//        ParquetOutputFormat.setDictionaryPageSize(job, 104857600);
 
         ParquetOutputFormat.setCompression(job, CompressionCodecName.SNAPPY);
 
@@ -100,7 +103,7 @@ public class DataLoading {
                 ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil, hil, 0);
                 long hilbertValue = ranges.toList().get(0).low();
 
-                currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(),tuple.get(i)._3()));
+                currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3()));
 
                 if(currentHilValue != hilbertValue){
 
@@ -108,8 +111,8 @@ public class DataLoading {
                     double minLatitude = Double.MAX_VALUE;
                     long minTimestamp = Long.MAX_VALUE;
 
-                    double maxLongitude = Double.MIN_VALUE;
-                    double maxLatitude = Double.MIN_VALUE;
+                    double maxLongitude = -Double.MAX_VALUE;
+                    double maxLatitude = -Double.MAX_VALUE;
                     long maxTimestamp = Long.MIN_VALUE;
 
                     for (int j = 0; j < currentPart.size(); j++) {
@@ -132,7 +135,6 @@ public class DataLoading {
                             maxTimestamp = currentPart.get(j).getTimestamp();
                         }
                     }
-
                     trajectoryParts.add(Tuple2.apply(currentHilValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
 
                     currentPart.clear();
@@ -149,8 +151,8 @@ public class DataLoading {
                 double minLatitude = Double.MAX_VALUE;
                 long minTimestamp = Long.MAX_VALUE;
 
-                double maxLongitude = Double.MIN_VALUE;
-                double maxLatitude = Double.MIN_VALUE;
+                double maxLongitude = -Double.MAX_VALUE;
+                double maxLatitude = -Double.MAX_VALUE;
                 long maxTimestamp = Long.MIN_VALUE;
 
                 for (int j = 0; j < currentPart.size(); j++) {
@@ -173,7 +175,6 @@ public class DataLoading {
                         maxTimestamp = currentPart.get(j).getTimestamp();
                     }
                 }
-
                 trajectoryParts.add(Tuple2.apply(currentHilValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
 
                 currentPart.clear();

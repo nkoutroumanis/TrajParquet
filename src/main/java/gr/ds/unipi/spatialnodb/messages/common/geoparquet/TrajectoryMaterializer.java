@@ -107,25 +107,25 @@ public class TrajectoryMaterializer extends RecordMaterializer<Trajectory> {
         }
     };
 
-    GroupConverter p3 = new GroupConverter() {
-        @Override
-        public Converter getConverter(int i) {
-            if(i==0){
-                return p3nested0;
-            }
-            return null;
-        }
+//    GroupConverter p3 = new GroupConverter() {
+//        @Override
+//        public Converter getConverter(int i) {
+//            if(i==0){
+//                return p3nested0;
+//            }
+//            return null;
+//        }
+//
+//        @Override
+//        public void start() {
+//        }
+//
+//        @Override
+//        public void end() {
+//        }
+//    };
 
-        @Override
-        public void start() {
-        }
-
-        @Override
-        public void end() {
-        }
-    };
-
-    PrimitiveConverter p3nested0 = new PrimitiveConverter() {
+    PrimitiveConverter p3 = new PrimitiveConverter() {
         @Override
         public boolean isPrimitive() {
             return super.isPrimitive();

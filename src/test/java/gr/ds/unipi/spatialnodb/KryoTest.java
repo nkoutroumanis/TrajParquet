@@ -7,8 +7,8 @@ import com.esotericsoftware.kryo.io.ByteBufferOutput;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.DefaultArraySerializers;
-import gr.aueb.delorean.chimp.Chimp;
-import gr.aueb.delorean.chimp.ChimpDecompressor;
+//import gr.aueb.delorean.chimp.Chimp;
+//import gr.aueb.delorean.chimp.ChimpDecompressor;
 import gr.ds.unipi.spatialnodb.messages.common.segmentv5.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.shapes.Point;
 import org.junit.Ignore;
@@ -59,22 +59,22 @@ public class KryoTest {
         System.out.println(spt[1000].getLatitude());
     }
 
-    @Ignore
-    @Test
-    public void chimpTest() throws IOException {
-
-        Chimp compressorLon = new Chimp();
-        compressorLon.addValue(1231.231);
-        compressorLon.addValue(1324.344432);
-        compressorLon.addValue(892.34);
-        compressorLon.addValue(234.2);
-        compressorLon.addValue(3457.45);
-
-        compressorLon.close();
-
-        ChimpDecompressor chimpDecompressor = new ChimpDecompressor(compressorLon.getOut());
-        chimpDecompressor.getValues().forEach(System.out::println);
-
-    }
+//    @Ignore
+//    @Test
+//    public void chimpTest() throws IOException {
+//
+//        Chimp compressorLon = new Chimp();
+//        compressorLon.addValue(1231.231);
+//        compressorLon.addValue(1324.344432);
+//        compressorLon.addValue(892.34);
+//        compressorLon.addValue(234.2);
+//        compressorLon.addValue(3457.45);
+//
+//        compressorLon.close();
+//
+//        ChimpDecompressor chimpDecompressor = new ChimpDecompressor(compressorLon.getOut());
+//        chimpDecompressor.getValues().forEach(System.out::println);
+//
+//    }
 
 }

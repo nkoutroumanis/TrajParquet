@@ -131,6 +131,14 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>net.alchim31.maven</groupId>
+                <artifactId>scala-maven-plugin</artifactId>
+                <version>4.8.1</version>
+                <configuration>
+                    <scalaVersion>2.12.8</scalaVersion>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.segmentv9;
+package gr.ds.unipi.spatialnodb.messages.common.spatialparquet;
 
 import java.io.Serializable;
 

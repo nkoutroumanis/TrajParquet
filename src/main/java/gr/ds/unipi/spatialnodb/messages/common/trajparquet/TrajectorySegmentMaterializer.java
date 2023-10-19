@@ -1,16 +1,12 @@
-package gr.ds.unipi.spatialnodb.messages.common.segmentv6;
+package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 
 //import fi.iki.yak.ts.compression.gorilla.ByteBufferBitInput;
 //import fi.iki.yak.ts.compression.gorilla.Decompressor;
 //import fi.iki.yak.ts.compression.gorilla.Value;
 //import gr.aueb.delorean.chimp.ChimpNDecompressor;
 import org.apache.parquet.io.api.*;
-import scala.util.control.Exception;
 
 import java.nio.ByteBuffer;
-import java.nio.DoubleBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 public class TrajectorySegmentMaterializer extends RecordMaterializer<TrajectorySegment> {
 

@@ -1,11 +1,11 @@
-package gr.ds.unipi.spatialnodb.dataloading.segmentv9;
+package gr.ds.unipi.spatialnodb.dataloading.trajparquetk;
 
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv9.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv9.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv9.TrajectorySegmentWriteSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWriteSupport;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -40,6 +40,7 @@ public class DataLoading {
         final int timeIndex = dataLoading.getInt("timeIndex");
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
+        final int segK = dataLoading.getInt("segK");
 
         Config hilbert = dataLoading.getConfig("hilbert");
 
@@ -51,12 +52,12 @@ public class DataLoading {
         final double maxLat = hilbert.getDouble("maxLat");
         final long maxTime = hilbert.getLong("maxTime");
 
-        final long maxOrdinates = 1L << bits;
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final long maxOrdinates = hilbertCurve.maxOrdinate();
 
         Job job = Job.getInstance();
 
-        ParquetOutputFormat.setCompression(job, CompressionCodecName.SNAPPY);
+        ParquetOutputFormat.setCompression(job, CompressionCodecName.UNCOMPRESSED);
 
         ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWriteSupport.class);
 
@@ -88,28 +89,19 @@ public class DataLoading {
 
             //initialize for the currentHilValue
             int part = 1;
-            long[] hil = HilbertUtil.scaleGeoTemporalPoint(tuple.get(0)._1(), minLon, maxLon, tuple.get(0)._2(), minLat, maxLat, tuple.get(0)._3(), minTime, maxTime, maxOrdinates);
-            Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil, hil, 0);
-            long currentHilValue = ranges.toList().get(0).low();
-            currentPart.add(new SpatioTemporalPoint(tuple.get(0)._1(), tuple.get(0)._2(),tuple.get(0)._3()));
-
-            for (int i = 1; i < tuple.size(); i++) {
-//                System.out.println(objectId+" "+tuple.get(i)._1() +" "+ minLon+" "+ maxLon+" "+ tuple.get(i)._2()+" "+ minLat+" "+ maxLat+" "+ tuple.get(i)._3()+" "+ minTime+" "+ maxTime+" "+ maxOrdinates);
-
-                hil = HilbertUtil.scaleGeoTemporalPoint(tuple.get(i)._1(), minLon, maxLon, tuple.get(i)._2(), minLat, maxLat, tuple.get(i)._3(), minTime, maxTime, maxOrdinates);
-                ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil, hil, 0);
-                long hilbertValue = ranges.toList().get(0).low();
+            for (int i = 0; i < tuple.size(); i++) {
+                //System.out.println(objectId+" "+tuple.get(i)._1() +" "+ minLon+" "+ maxLon+" "+ tuple.get(i)._2()+" "+ minLat+" "+ maxLat+" "+ tuple.get(i)._3()+" "+ minTime+" "+ maxTime+" "+ maxOrdinates);
 
                 currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(),tuple.get(i)._3()));
 
-                if(currentHilValue != hilbertValue){
+                if(currentPart.size()==segK){
 
                     double minLongitude = Double.MAX_VALUE;
                     double minLatitude = Double.MAX_VALUE;
                     long minTimestamp = Long.MAX_VALUE;
 
-                    double maxLongitude = Double.MIN_VALUE;
-                    double maxLatitude = Double.MIN_VALUE;
+                    double maxLongitude = -Double.MAX_VALUE;
+                    double maxLatitude = -Double.MAX_VALUE;
                     long maxTimestamp = Long.MIN_VALUE;
 
                     for (int j = 0; j < currentPart.size(); j++) {
@@ -133,13 +125,16 @@ public class DataLoading {
                         }
                     }
 
-                    trajectoryParts.add(Tuple2.apply(currentHilValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
+                    long[] hil = HilbertUtil.scaleGeoTemporalPoint(currentPart.get(0).getLongitude(), minLon, maxLon, currentPart.get(0).getLatitude(), minLat, maxLat, currentPart.get(0).getTimestamp(), minTime, maxTime, maxOrdinates);
+                    Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil, hil, 0);
+                    long hilbertValue = ranges.toList().get(0).low();
+
+                    trajectoryParts.add(Tuple2.apply(hilbertValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
 
                     currentPart.clear();
                     if(i!=tuple.size()-1) {
                         currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3()));
                     }
-                    currentHilValue = hilbertValue;
                 }
             }
 
@@ -149,8 +144,8 @@ public class DataLoading {
                 double minLatitude = Double.MAX_VALUE;
                 long minTimestamp = Long.MAX_VALUE;
 
-                double maxLongitude = Double.MIN_VALUE;
-                double maxLatitude = Double.MIN_VALUE;
+                double maxLongitude = -Double.MAX_VALUE;
+                double maxLatitude = -Double.MAX_VALUE;
                 long maxTimestamp = Long.MIN_VALUE;
 
                 for (int j = 0; j < currentPart.size(); j++) {
@@ -174,7 +169,11 @@ public class DataLoading {
                     }
                 }
 
-                trajectoryParts.add(Tuple2.apply(currentHilValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
+                long[] hil = HilbertUtil.scaleGeoTemporalPoint(currentPart.get(0).getLongitude(), minLon, maxLon, currentPart.get(0).getLatitude(), minLat, maxLat, currentPart.get(0).getTimestamp(), minTime, maxTime, maxOrdinates);
+                Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil, hil, 0);
+                long hilbertValue = ranges.toList().get(0).low();
+
+                trajectoryParts.add(Tuple2.apply(hilbertValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
 
                 currentPart.clear();
             }
@@ -187,7 +186,55 @@ public class DataLoading {
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
-
     }
+
+
+
+//    Job job = Job.getInstance();
+//
+////        ParquetOutputFormat.setCompression(job, CompressionCodecName.SNAPPY);
+//
+//        ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWriteSupport .class);
+//
+//    SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
+//    SimpleDateFormat sdf1 =  new SimpleDateFormat("yyyy-MM-dd");
+//
+//    SparkConf sparkConf = new SparkConf().setMaster("local[1]").set("spark.executor.memory","1g").registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+//    SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
+//    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+//
+//    Broadcast smallHilbertCurveBr = jsc.broadcast(hilbertCurve);
+//
+//    JavaPairRDD rdd = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex]).flatMapToPair(f->{
+//        List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
+//
+//        for (String[] strings : f._2) {
+//            long timestamp = -1;
+//            try {
+//                timestamp = sdf.parse(strings[timeIndex]).getTime();
+//            }catch (Exception e){
+//                continue;
+//            }
+//            tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
+//        }
+//        tuple.sort(Comparator.comparingLong(Tuple3::_3));
+//
+//        String objectId = f._1;
+//
+//        List<Tuple2<Long, TrajectorySegment>> trajectorySegments = new ArrayList<>();
+//
+//        int segment = 1;
+//        for (int i = 0; i < tuple.size()-1; i++) {
+//            long[] hil = HilbertUtil.scaleGeoTemporalPoint(tuple.get(i)._1(), minLon, maxLon, tuple.get(i)._2(), minLat, maxLat, tuple.get(i)._3(), minTime, maxTime, maxOrdinates);
+//            Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil, hil, 0);
+//            long hilbertValue = ranges.toList().get(0).low();
+//
+//            Tuple2<Long, TrajectorySegment> seg = Tuple2.apply(hilbertValue, new TrajectorySegment(objectId, segment++, Math.min(tuple.get(i)._1(),tuple.get(i+1)._1()), Math.min(tuple.get(i)._2(),tuple.get(i+1)._2()), tuple.get(i)._3(), Math.max(tuple.get(i)._1(),tuple.get(i+1)._1()), Math.max(tuple.get(i)._2(),tuple.get(i+1)._2()), tuple.get(i+1)._3()));
+//            trajectorySegments.add(seg);
+//        }
+//        return trajectorySegments.iterator();
+//    }).sortByKey().mapToPair(f->Tuple2.apply(null, f._2));
+//
+//        rdd.saveAsNewAPIHadoopFile(writePath, Void.class, TrajectorySegment.class, ParquetOutputFormat.class, job.getConfiguration());
 
 }

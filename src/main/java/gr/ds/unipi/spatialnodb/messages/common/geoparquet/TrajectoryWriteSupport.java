@@ -16,9 +16,10 @@ public class TrajectoryWriteSupport extends WriteSupport<Trajectory> {
             "required BINARY objectId;\n" +
             "required INT64 trajectoryId;\n" +
             "required BINARY wkb;\n" +
-            "repeated group timestamps{\n" +
-            "required INT64 timestamp;\n" +
-            "}\n" +
+//            "repeated group timestamps{\n" +
+//            "required INT64 timestamp;\n" +
+//            "}\n" +
+            "repeated INT64 timestamps;\n" +
             "required DOUBLE minLongitude;\n" +
             "required DOUBLE minLatitude;\n" +
             "required INT64 minTimestamp;\n" +
@@ -57,13 +58,13 @@ public class TrajectoryWriteSupport extends WriteSupport<Trajectory> {
         recordConsumer.endField("wkb",2);
 
         recordConsumer.startField("timestamps",3);
-        recordConsumer.startGroup();
-        recordConsumer.startField("timestamp",0);
+//        recordConsumer.startGroup();
+//        recordConsumer.startField("timestamp",0);
         for (long timestamp : trajectory.getTimestamps()) {
             recordConsumer.addLong(timestamp);
         }
-        recordConsumer.endField("timestamp",0);
-        recordConsumer.endGroup();
+//        recordConsumer.endField("timestamp",0);
+//        recordConsumer.endGroup();
         recordConsumer.endField("timestamps",3);
 
         recordConsumer.startField("minLongitude",4);

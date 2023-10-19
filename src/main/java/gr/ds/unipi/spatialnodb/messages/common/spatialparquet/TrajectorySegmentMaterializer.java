@@ -1,8 +1,7 @@
-package gr.ds.unipi.spatialnodb.messages.common.segmentv9;
+package gr.ds.unipi.spatialnodb.messages.common.spatialparquet;
 
 import org.apache.parquet.io.api.*;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 

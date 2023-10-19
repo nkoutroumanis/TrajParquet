@@ -1,14 +1,13 @@
-package gr.ds.unipi.spatialnodb.queries.segmentv9;
+package gr.ds.unipi.spatialnodb.queries.spatialparquet;
 
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv9.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv9.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv9.TrajectorySegmentReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.spatialparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.spatialparquet.TrajectorySegment;
+import gr.ds.unipi.spatialnodb.messages.common.spatialparquet.TrajectorySegmentReadSupport;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
-import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -20,8 +19,6 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-
-import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 public class RangeQueries {
     public static void main(String args[]) throws IOException {
@@ -61,8 +58,11 @@ public class RangeQueries {
 //            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
 //            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
-            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
             long startTime = System.currentTimeMillis();
+
+            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
+//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
+
             JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD
                     .flatMapValues(f -> {
 
@@ -99,7 +99,6 @@ public class RangeQueries {
                             } else {
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
                             }
-//                            System.out.println("HERE "+ spatioTemporalPoints[i].getLongitude()+" "+spatioTemporalPoints[i].getLatitude() +" "+spatioTemporalPoints[i+1].getLongitude() +" "+spatioTemporalPoints[i+1].getLatitude() +" Query "+ queryMinLongitude+" "+ queryMinLatitude+" "+queryMaxLongitude+" "+ queryMaxLatitude);
                         } else {//if the line does not intersect with the spatial part of the query
                             if (currentSpatioTemporalPoints.size() > 0) {
                                 trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
@@ -150,7 +149,6 @@ public class RangeQueries {
             });
 
             List<Tuple2<Void, TrajectorySegment>> trajs = pairRDDRangeQuery.collect();
-
             long num = trajs.size();
 
             long numOfPoints = 0;
