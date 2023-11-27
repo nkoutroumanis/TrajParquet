@@ -62,7 +62,7 @@ public class RangeQueries {
             FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
             FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
-            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
+//            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
             long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
@@ -180,12 +180,34 @@ public class RangeQueries {
             });
 
             List<Tuple2<Void,TrajectorySegment>> trajs = pairRDDRangeQuery.collect();
+//            List<Tuple2<Void,TrajectorySegment>> trajs = new ArrayList<>(pairRDDRangeQuery.collect());
             long num = trajs.size();
 
             long numOfPoints = 0;
             for (Tuple2<Void, TrajectorySegment> voidTrajectoryTuple2 : trajs) {
                 numOfPoints = numOfPoints + voidTrajectoryTuple2._2.getSpatioTemporalPoints().length;
             }
+
+//            trajs.sort(Comparator.comparingLong(seg->seg._2.getSpatioTemporalPoints()[0].getTimestamp()+Long.parseLong(seg._2.getObjectId())));
+
+//            if(trajs.size()==993){
+//                int k = 0;
+//                for (int ff = 0; ff < trajs.size(); ff++) {
+//                    if(trajs.get(ff)._2.getObjectId().equals("226338000") && (trajs.get(ff)._2.getSegment()==2)){
+//
+//                        System.out.println(trajs.get(ff));
+//                    }
+//                    bw.write(trajs.get(ff)._2.getObjectId() +" "+ trajs.get(ff)._2.getSegment()+" "+trajs.get(ff)._2.getSpatioTemporalPoints().length + " "+trajs.get(ff)._2.getSpatioTemporalPoints()[0].getTimestamp() +"\n");
+//                    k++;
+//                }
+//                try {
+//                    bw.close();
+//                    throw new Exception("THERE EXISTS segment with one point" + num +" k is "+k);
+//                } catch (Exception e) {
+//                    throw new RuntimeException(e);
+//                }
+////            System.out.println("END");
+//            }
 
 //            trajs.forEach(tr->{
 //                System.out.println(tr._2);

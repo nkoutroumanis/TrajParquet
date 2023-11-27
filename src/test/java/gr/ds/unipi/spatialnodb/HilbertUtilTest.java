@@ -287,7 +287,7 @@ public class HilbertUtilTest {
 
         System.out.println(hilbertCurve.index(hil1));
 
-        long[] cube =  hilbertCurve.point(3);
+        long[] cube =  hilbertCurve.point(1);
 
         System.out.println("Lower");
         System.out.println( minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+1l)));
@@ -406,25 +406,102 @@ public class HilbertUtilTest {
 
     }
 
+    @Test
+    public void checkCase3()  {
+
+        final int bits = 5;
+        final double minLon=-9.713331;
+        final double minLat=45.001045;
+        final long minTime=1443650401000l;
+        final double maxLon=-0.015736665;
+        final double maxLat=50.7706;
+        final long maxTime=1459461603000l;
+
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final long maxOrdinates = hilbertCurve.maxOrdinate();
+
+        double lineX1 = -4.48201;
+        double lineY1 = 48.219673;
+        long lineT1 = 1453895233000l;
+
+        double lineX2 = -4.71573;
+        double lineY2 = 48.298286;
+        long lineT2 = 1453895235000l;
+
+
+        long[] hil1 = HilbertUtil.scaleGeoTemporalPoint(lineX1, minLon, maxLon, lineY1, minLat, maxLat, lineT1, minTime, maxTime, maxOrdinates);
+        long[] hil2 = HilbertUtil.scaleGeoTemporalPoint(lineX2, minLon, maxLon, lineY2, minLat, maxLat, lineT2, minTime, maxTime, maxOrdinates);
+
+
+        System.out.println(hilbertCurve.index(hil1));
+        System.out.println(hilbertCurve.index(hil2));
+
+
+        hilbertCurve.query(hil1,hil2,0).forEach(System.out::println);
+
+        long[] cube =  hilbertCurve.point(20964);
+        double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
+        double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
+        long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
+
+        double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
+        double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
+        long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
+
+
+        Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(lineX1, lineY1, lineT1, lineX2, lineY2, lineT2, xMin, yMin, tMin, xMax, yMax, tMax );
+
+        if(stPoints.isPresent()){
+            System.out.println(stPoints.get()[0].getX() +" "+ stPoints.get()[0].getY() +" "+stPoints.get()[0].getT());
+            System.out.println(stPoints.get()[1].getX() +" "+ stPoints.get()[1].getY() +" "+stPoints.get()[1].getT());
+
+        }
+
+    }
 
     @Test
     public void LiangBarsky()  {
 
-        double lineX0 = 30;
-        double lineY0 = 30;
-        long lineT0 = 30;
+        double lineX0 = -4.8645935;
+        double lineY0 = 48.490345;
+        long lineT0 = 1454445282000000l;
 
-        double lineX1 = 81;
-        double lineY1 = 80;
-        long lineT1= 80;
+        double lineX1 = -0.8643733;
+        double lineY1 = 48.48994;
+        long lineT1= 1454445288000000l;
 
-        double xMin = 0;
-        double yMin = 0;
-        long tMin = 0;
+        double xMin = -5.16758365546875;
+        double yMin = 48.426718281250004;
+        long tMin = 1454026502312000l;
 
-        double xMax = 50;
-        double yMax = 50;
-        long tMax= 50;
+        double xMax = -4.8645338325;
+        double yMax = 48.607016875;
+        long tMax= 1454520602375000l;
+
+
+//        double lineX0 = -4.48201;
+//        double lineY0 =48.219673;
+//        long lineT0 = 1453895233000000l;
+//
+//        double lineX1 = -4.71573;
+//        double lineY1 = 48.298286;
+//        long lineT1= 1453895235000000l;
+
+//        double xMin =  -4.8645338325;
+//        double yMin = 48.2464196875;
+//        long tMin = 1453532402250000l;
+//
+//        double xMax = -4.5614840095312505;
+//        double yMax = 48.426718281250004;
+//        long tMax= 1454026502312000l;
+
+//        double xMin =  -4.5614840095312505;
+//        double yMin = 48.06612109375;
+//        long tMin = 1453532402250000l;
+//
+//        double xMax = -4.2584341865625;
+//        double yMax = 48.2464196875;
+//        long tMax= 1454026502312000l;
 
         Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(lineX0, lineY0, lineT0, lineX1, lineY1, lineT1, xMin, yMin, tMin, xMax, yMax, tMax );
 

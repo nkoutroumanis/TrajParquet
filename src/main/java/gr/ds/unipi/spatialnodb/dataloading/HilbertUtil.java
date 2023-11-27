@@ -120,7 +120,7 @@ public class HilbertUtil {
         double u1 = 0, u2 = 1;
 
         double dx = lineX1 - lineX0, dy = lineY1 - lineY0;
-        double dt = lineT1 - lineT0;
+        long dt = lineT1 - lineT0;
 
         double p[] = {-dx, dx, -dy, dy, -dt, dt};
         double q[] = {lineX0 - xMin, xMax - lineX0, lineY0 - yMin, yMax - lineY0, lineT0 - tMin, tMax - lineT0};
@@ -149,12 +149,11 @@ public class HilbertUtil {
         long nt0, nt1;
         nx0 = (lineX0 + u1 * dx);
         ny0 = (lineY0 + u1 * dy);
-        nt0 = (long)  (lineT0 + u1 * dt);
+        nt0 = (long) (lineT0 + u1 * dt);
 
         nx1 = (lineX0 + u2 * dx);
         ny1 = (lineY0 + u2 * dy);
         nt1 = (long) (lineT0 + u2 * dt);
-
 
         List<STPoint> stPoints = new ArrayList<>(2);
         STPoint stPoint1 =  new STPoint(nx0, ny0, nt0);

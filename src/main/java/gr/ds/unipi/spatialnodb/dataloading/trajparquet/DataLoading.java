@@ -278,6 +278,21 @@ public class DataLoading {
                 currentPart.clear();
             }
 
+            trajectoryParts.sort(Comparator.comparingLong(d-> d._2.getSpatioTemporalPoints()[0].getTimestamp()));
+            for (int i = 0; i < trajectoryParts.size()-1; i++) {
+                if(trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getTimestamp() != trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getTimestamp()){
+                    throw new Exception("NOT EQUAL");
+                }
+            }
+//            if(f._1.equals("636015607")){
+//                trajectoryParts.forEach(tr->{
+//                    for (SpatioTemporalPoint spatioTemporalPoint : tr._2.getSpatioTemporalPoints()) {
+//                        System.out.println(spatioTemporalPoint.getLongitude() +" - "+spatioTemporalPoint.getLatitude() + " - " + spatioTemporalPoint.getTimestamp());
+//                    }
+//                    System.out.println("---");
+//                });
+//                throw new RuntimeException("SPOTTED");
+//            }
             return trajectoryParts.iterator();
 
         }).sortByKey().mapToPair(f->Tuple2.apply(null, f._2));
