@@ -553,6 +553,36 @@ public class HilbertUtilTest {
 //        System.out.println(nx0 + " "+ ny0+ " "+ nt0+ " "+ nx1+ " "+ ny1+ " "+ nt1);
 //        System.out.println(HilbertUtil.lineLineIntersection(lineX0, lineY0, lineX1, lineY1, 50, 0, 50, 50));
     }
+
+    @Test
+    public void LiangBarskyTest2()  {
+
+        double lineX0 = -2.077968139158168;
+        double lineY0 = 49.87955242626847;
+        long lineT0 = 1453530800444l;
+
+        double lineX1 = -1.6198933;
+        double lineY1 = 50.042137;
+        long lineT1= 1453534739000l;
+
+        double xMin = -2.077968139158168;
+        double yMin = 48.9932022366616;
+        long tMin = 1452645442462l;
+
+        double xMax = -0.5779681391581679;
+        double yMax = 50.4932022366616;
+        long tMax= 1455237442462l;
+
+
+        Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(lineX0, lineY0, lineT0, lineX1, lineY1, lineT1, xMin, yMin, tMin, xMax, yMax, tMax );
+
+        if(stPoints.isPresent()){
+            for (STPoint stPoint : stPoints.get()) {
+                System.out.println(stPoint);
+            }
+        }
+    }
+
     @Test
     public void checkComparisonCase()  {
         long maxLongitude = Long.MIN_VALUE;
@@ -594,5 +624,24 @@ public class HilbertUtilTest {
 
 //        System.out.println(HilbertUtil.lineLineIntersection(xMin, yMin, xMin, yMax, lineX0, lineY0, lineX1, lineY1).get().toString());
 
+    }
+
+    @Test
+    public void hilbertTestPoint3() throws IOException {
+
+        int bits = 7;
+        SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        long maxOrdinates = 1L << bits;
+
+        long[] hil = HilbertUtil.scaleGeoTemporalPoint(-4.4857216, -9.713331, -0.015736665,48.38109 , 45.001045, 50.7706, 1450827290000l, 1443650401000l, 1459461603000l, maxOrdinates);
+
+//        -4.4857216, latitude=48.38109, timestamp=
+
+        Ranges ranges = hilbertCurve.query(hil, hil, 0);
+        for (Range range : ranges) {
+            System.out.println(range.low() + " - " + range.high());
+        }
+        long hilbertValue = ranges.toList().get(0).low();
+        System.out.println("hilbert: " + hilbertValue);
     }
 }

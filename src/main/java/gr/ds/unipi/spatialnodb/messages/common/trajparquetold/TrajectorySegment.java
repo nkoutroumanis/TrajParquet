@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
+package gr.ds.unipi.spatialnodb.messages.common.trajparquetold;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -46,56 +46,28 @@ public class TrajectorySegment implements Serializable {
 
     public TrajectorySegment(String objectId, long segment, List<TrajectorySegment> trajectorySegments) {
 
-        if(trajectorySegments.size()!=1) {
-
-
-            this.objectId = objectId;
+        this.objectId = objectId;
 
 //        this.trajectoryId=-1;
-            this.segment = segment;
+        this.segment = segment;
 
-            int spatioTemporalPointsNum = trajectorySegments.get(0).getSpatioTemporalPoints().length - 1;
-            spatioTemporalPointsNum = spatioTemporalPointsNum + trajectorySegments.get(trajectorySegments.size() - 1).getSpatioTemporalPoints().length - 1;
+        int spatioTemporalPointsNum = trajectorySegments.get(0).getSpatioTemporalPoints().length;
 
-            for (int i = 1; i < trajectorySegments.size() - 1; i++) {
-                spatioTemporalPointsNum = spatioTemporalPointsNum + (trajectorySegments.get(i).getSpatioTemporalPoints().length - 2);
-            }
-
-            this.spatioTemporalPoints = new SpatioTemporalPoint[spatioTemporalPointsNum];
-            int arrayIndex = 0;
-
-            for (int i = 0; i < trajectorySegments.get(0).spatioTemporalPoints.length - 1; i++) {
-                spatioTemporalPoints[arrayIndex++] = trajectorySegments.get(0).spatioTemporalPoints[i];
-            }
-
-            for (int i = 1; i < trajectorySegments.size() - 1; i++) {
-                for (int j = 1; j < trajectorySegments.get(i).getSpatioTemporalPoints().length - 1; j++) {
-                    spatioTemporalPoints[arrayIndex++] = trajectorySegments.get(i).getSpatioTemporalPoints()[j];
-                }
-            }
-
-            for (int i = 1; i < trajectorySegments.get(trajectorySegments.size() - 1).spatioTemporalPoints.length; i++) {
-                spatioTemporalPoints[arrayIndex++] = trajectorySegments.get(trajectorySegments.size() - 1).spatioTemporalPoints[i];
-            }
-        }
-        else{
-
-            this.objectId = objectId;
-            this.segment = segment;
-            this.spatioTemporalPoints = trajectorySegments.get(0).getSpatioTemporalPoints();
-
-//            for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
-//                if(spatioTemporalPoint==null){
-//                    try {
-//                        throw new Exception("NULL");
-//                    } catch (Exception e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//            }
-
+        for (int i = 1; i < trajectorySegments.size(); i++) {
+            spatioTemporalPointsNum = spatioTemporalPointsNum + (trajectorySegments.get(i).getSpatioTemporalPoints().length-1);
         }
 
+        this.spatioTemporalPoints = new SpatioTemporalPoint[spatioTemporalPointsNum];
+        int arrayIndex = 0;
+        for (SpatioTemporalPoint spPoint : trajectorySegments.get(0).spatioTemporalPoints) {
+            spatioTemporalPoints[arrayIndex++] = spPoint;
+        }
+
+        for (int i = 1; i < trajectorySegments.size(); i++) {
+            for (int j = 1; j < trajectorySegments.get(i).getSpatioTemporalPoints().length; j++) {
+                spatioTemporalPoints[arrayIndex++] = trajectorySegments.get(i).getSpatioTemporalPoints()[j];
+            }
+        }
 
         this.minLongitude = -1;
         this.minLatitude = -1;

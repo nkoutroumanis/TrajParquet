@@ -5,6 +5,8 @@ import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.geoparquet.Trajectory;
 import gr.ds.unipi.spatialnodb.messages.common.geoparquet.TrajectoryReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegment;
+import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
@@ -21,6 +23,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
@@ -76,48 +79,88 @@ public class RangeQueries {
 
                 Coordinate[] coordinates = f.getLineString().getCoordinates();
                 for (int i = 0; i < coordinates.length-1; i++) {
-                    //if intersected in time
-                    if(f.getTimestamps()[i+1]>= queryMinTimestamp && f.getTimestamps()[i]<= queryMaxTimestamp){
 
-                        //if one of the points of the line is inside the spatial part of the query
-                        if(HilbertUtil.pointInRectangle(coordinates[i].x,coordinates[i].y, queryMinLongitude, queryMinLatitude, queryMaxLongitude, queryMaxLatitude)
-                                || HilbertUtil.pointInRectangle(coordinates[i+1].x,coordinates[i+1].y, queryMinLongitude, queryMinLatitude, queryMaxLongitude, queryMaxLatitude)){
+                    Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(coordinates[i].x, coordinates[i].y,f.getTimestamps()[i],
+                            coordinates[i+1].x, coordinates[i+1].y,f.getTimestamps()[i+1]
+                            ,queryMinLongitude, queryMinLatitude, queryMinTimestamp, queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);
 
-                            if (currentCoordinates.size() == 0) {
-                                currentCoordinates.add(new Coordinate(coordinates[i].x,coordinates[i].y));
+
+                    if(stPoints.isPresent()){
+                        if(stPoints.get().length==2){
+                            if(stPoints.get()[0].getT() == f.getTimestamps()[i] &&
+                                    stPoints.get()[1].getT() == f.getTimestamps()[i+1]){
+//                                    if(stPoints.get()[0].equals(new STPoint(spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp())) &&
+//                                            stPoints.get()[1].equals(new STPoint(spatioTemporalPoints[i+1].getLongitude(),spatioTemporalPoints[i+1].getLatitude(),spatioTemporalPoints[i+1].getTimestamp()))){
+                                if(currentCoordinates.size()!=0){
+                                    if(!(currentCoordinates.get(currentCoordinates.size()-1).equals(coordinates[i])
+                                        && currentTimestamps.get(currentTimestamps.size()-1).equals(f.getTimestamps()[i]))){
+                                        throw new Exception("The i th element of the segment should be the last point of the current list.");
+                                    }
+                                }
+
+                                if (currentCoordinates.size() == 0) {
+                                    currentCoordinates.add(new Coordinate(coordinates[i].x,coordinates[i].y));
+                                    currentTimestamps.add(f.getTimestamps()[i]);
+                                }
                                 currentCoordinates.add(new Coordinate(coordinates[i+1].x,coordinates[i+1].y));
-                                currentTimestamps.add(f.getTimestamps()[i]);
+                                currentTimestamps.add(f.getTimestamps()[i+1]);
+                            }else if(stPoints.get()[0].getT() == f.getTimestamps()[i]){
+//                                    }else if(stPoints.get()[0].equals(new STPoint(spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp()))){
+
+                                if (currentCoordinates.size() == 0) {
+                                    currentCoordinates.add(new Coordinate(coordinates[i].x,coordinates[i].y));
+                                    currentTimestamps.add(f.getTimestamps()[i]);
+                                }
+
+                                currentCoordinates.add(new Coordinate(stPoints.get()[1].getX(), stPoints.get()[1].getY()));
+                                currentTimestamps.add(stPoints.get()[1].getT());
+
+                                trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                                currentCoordinates.clear();
+                                currentTimestamps.clear();
+                            }else if(stPoints.get()[1].getT() == f.getTimestamps()[i+1]){
+//                                    }else if(stPoints.get()[1].equals(new STPoint(spatioTemporalPoints[i+1].getLongitude(),spatioTemporalPoints[i+1].getLatitude(),spatioTemporalPoints[i+1].getTimestamp()))){
+
+                                if(currentCoordinates.size()==1){
+                                    throw new Exception("Exception for the current list, it will be flushed and has only one element.");
+                                }
+
+                                if (currentCoordinates.size() != 0) {
+                                    trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                                    currentCoordinates.clear();
+                                    currentTimestamps.clear();
+                                }
+                                currentCoordinates.add(new Coordinate(stPoints.get()[0].getX(), stPoints.get()[0].getY()));
+                                currentTimestamps.add( stPoints.get()[0].getT());
+
+                                currentCoordinates.add(new Coordinate(coordinates[i+1].x,coordinates[i+1].y));
                                 currentTimestamps.add(f.getTimestamps()[i+1]);
 
                             }else{
-                                currentCoordinates.add(new Coordinate(coordinates[i+1].x,coordinates[i+1].y));
-                                currentTimestamps.add(f.getTimestamps()[i+1]);
-                            }
+                                if(currentCoordinates.size()!=0){
+                                    throw new Exception("The current list has elements while it should not have.");
+                                }
 
-                        }else if(HilbertUtil.lineLineIntersection(coordinates[i].x,coordinates[i].y,coordinates[i+1].x,coordinates[i+1].y,queryMinLongitude, queryMinLatitude,queryMaxLongitude, queryMinLatitude,true)
-                        || HilbertUtil.lineLineIntersection(coordinates[i].x,coordinates[i].y,coordinates[i+1].x,coordinates[i+1].y,queryMinLongitude, queryMinLatitude,queryMinLongitude, queryMaxLatitude,true)
-                        || HilbertUtil.lineLineIntersection(coordinates[i].x,coordinates[i].y,coordinates[i+1].x,coordinates[i+1].y,queryMinLongitude, queryMaxLatitude,queryMaxLongitude,queryMaxLatitude,false)
-                        || HilbertUtil.lineLineIntersection(coordinates[i].x,coordinates[i].y,coordinates[i+1].x,coordinates[i+1].y,queryMaxLongitude, queryMinLatitude,queryMaxLongitude,queryMaxLatitude,false)){
-                            //if the line penetrates the spatial part of the query
-                            if (currentCoordinates.size() == 0) {
-                                currentCoordinates.add(new Coordinate(coordinates[i].x,coordinates[i].y));
-                                currentCoordinates.add(new Coordinate(coordinates[i+1].x,coordinates[i+1].y));
-                                currentTimestamps.add(f.getTimestamps()[i]);
-                                currentTimestamps.add(f.getTimestamps()[i+1]);
+                                currentCoordinates.add(new Coordinate(stPoints.get()[0].getX(), stPoints.get()[0].getY()));
+                                currentTimestamps.add( stPoints.get()[0].getT());
 
-                            }else{
-                                currentCoordinates.add(new Coordinate(coordinates[i+1].x,coordinates[i+1].y));
-                                currentTimestamps.add(f.getTimestamps()[i+1]);
-                            }
-                        }else{//if the line does not intersect with the spatial part of the query
-                            if (currentCoordinates.size() > 0) {
+                                currentCoordinates.add(new Coordinate(stPoints.get()[1].getX(), stPoints.get()[1].getY()));
+                                currentTimestamps.add(stPoints.get()[1].getT());
+
                                 trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                 currentCoordinates.clear();
                                 currentTimestamps.clear();
                             }
+                        }else{
+                            throw new Exception("The array from the Liang Barsky should contain at least one element");
+                        }
+                    }else{
+                        if (currentCoordinates.size() > 0) {
+                            trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                            currentCoordinates.clear();
+                            currentTimestamps.clear();
                         }
                     }
-
                 }
                 if (currentCoordinates.size() > 0) {
                     trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
@@ -131,7 +174,10 @@ public class RangeQueries {
 
                 List<Trajectory> trSegments = new ArrayList<>();
                 f._2.forEach(t->trSegments.add(t._2));
-                trSegments.sort(Comparator.comparingLong(seg->seg.getTimestamps()[0]));
+
+                Comparator<Trajectory> comparator = Comparator.comparingLong(seg->seg.getTimestamps()[0]);
+                comparator = comparator.thenComparingLong(seg->seg.getTimestamps()[1]);
+                trSegments.sort(comparator);
 
                 List<Tuple2<Void, Trajectory>> finalList = new ArrayList<>();
                 List<Trajectory> currentMerged = new ArrayList<>();
@@ -140,7 +186,6 @@ public class RangeQueries {
                 int segmentNum = 0;
 
                 for (int i = 0; i < trSegments.size()-1; i++) {
-
 
                     long timestamp1 = trSegments.get(i).getTimestamps()[trSegments.get(i).getTimestamps().length-1];
                     long timestamp2 = trSegments.get(i+1).getTimestamps()[0];

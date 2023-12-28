@@ -462,7 +462,7 @@ public  final class SpatioTemporal extends
                 Coordinates.class, Builder.class);
       }
 
-      // Construct using gr.ds.unipi.spatialnodb.messages.proto.trajparquet.SpatioTemporal.Coordinates.newBuilder()
+      // Construct using gr.ds.unipi.spatialnodb.messages.proto.trajparquetold.SpatioTemporal.Coordinates.newBuilder()
       private Builder() {
         maybeForceBuilderInitialization();
       }
@@ -926,7 +926,7 @@ public  final class SpatioTemporal extends
               SpatioTemporal.class, Builder.class);
     }
 
-    // Construct using gr.ds.unipi.spatialnodb.messages.proto.trajparquet.SpatioTemporal.newBuilder()
+    // Construct using gr.ds.unipi.spatialnodb.messages.proto.trajparquetold.SpatioTemporal.newBuilder()
     private Builder() {
       maybeForceBuilderInitialization();
     }

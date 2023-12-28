@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
+package gr.ds.unipi.spatialnodb.messages.common.trajparquetold;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.InitContext;
@@ -13,15 +13,6 @@ public class TrajectorySegmentReadSupport extends ReadSupport<TrajectorySegment>
 
     @Override
     public ReadContext init(InitContext context){
-
-//        MessageType schema = MessageTypeParser.parseMessageType( "message TrajectorySegment {\n" +
-//                "required BINARY objectId;\n" +
-//                "required INT64 segment;\n" +
-//                "required BINARY longitude;\n" +
-//                "required BINARY latitude;\n" +
-//                "required BINARY timestamps;\n" +
-//                "}");
-//        return new ReadContext(schema);
         return new ReadContext(context.getFileSchema());
     }
 

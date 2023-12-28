@@ -1,16 +1,16 @@
-package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
+package gr.ds.unipi.spatialnodb.messages.common.trajparquetold;
 
 //import fi.iki.yak.ts.compression.gorilla.ByteBufferBitOutput;
 //import fi.iki.yak.ts.compression.gorilla.Compressor;
 //import gr.aueb.delorean.chimp.ChimpN;
 //import gr.aueb.delorean.chimp.ChimpNNoIndex;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
+//import gr.aueb.delorean.chimp.Chimp;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -20,13 +20,9 @@ public class TrajectorySegmentWriteSupport extends WriteSupport<TrajectorySegmen
     MessageType schema = MessageTypeParser.parseMessageType( "message TrajectorySegment {\n" +
             "required BINARY objectId;\n" +
             "required INT64 segment;\n" +
-//            "required BINARY spt;\n" +
             "required BINARY longitude;\n" +
             "required BINARY latitude;\n" +
             "required BINARY timestamps;\n" +
-//            "repeated group timestamps{\n" +
-//            "required INT64 timestamp;\n" +
-//            "}\n" +
             "required DOUBLE minLongitude;\n" +
             "required DOUBLE minLatitude;\n" +
             "required INT64 minTimestamp;\n" +

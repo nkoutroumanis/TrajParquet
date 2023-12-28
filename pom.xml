@@ -75,17 +75,17 @@
 <!--        <dependency>-->
 <!--            <groupId>org.apache.parquet</groupId>-->
 <!--            <artifactId>parquet-protobuf</artifactId>-->
-<!--            <version>1.13.0-trajparquet</version>-->
+<!--            <version>1.13.0-trajparquetold</version>-->
 <!--        </dependency>-->
 <!--        <dependency>-->
 <!--            <groupId>org.apache.parquet</groupId>-->
 <!--            <artifactId>parquet-common</artifactId>-->
-<!--            <version>1.13.0-trajparquet</version>-->
+<!--            <version>1.13.0-trajparquetold</version>-->
 <!--        </dependency>-->
 <!--        <dependency>-->
 <!--            <groupId>org.apache.parquet</groupId>-->
 <!--            <artifactId>parquet-hadoop</artifactId>-->
-<!--            <version>1.13.0-trajparquet</version>-->
+<!--            <version>1.13.0-trajparquetold</version>-->
 <!--        </dependency>-->
         <dependency>
             <groupId>org.apache.parquet</groupId>
