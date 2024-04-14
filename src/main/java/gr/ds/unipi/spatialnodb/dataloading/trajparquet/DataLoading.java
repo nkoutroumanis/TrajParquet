@@ -245,7 +245,10 @@ public class DataLoading {
                         }
                         tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
                     }
-                    tuple.sort(Comparator.comparingLong(Tuple3::_3));
+                    Comparator<Tuple3<Double, Double, Long>> comp = Comparator.comparingLong(d-> d._3());
+                    comp = comp.thenComparingDouble(d-> d._1());
+                    comp = comp.thenComparingDouble(d-> d._2());
+                    tuple.sort(comp);
 
                     String objectId = f._1;
 
@@ -369,12 +372,20 @@ public class DataLoading {
                             trajectoryParts.add(Tuple2.apply(currentHilValue, new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
                             currentPart.clear();
 
-
                             Comparator<Tuple2<Long, SpatioTemporalPoint[]>> comparator = Comparator.comparingLong(d-> d._2[0].getTimestamp());
                             //the second comparator is not really needed, but it can handle the intersected points of lines with cubes that have the same timestamp.
                             comparator = comparator.thenComparingLong(d-> d._2[1].getTimestamp());
                             //the third comparator is not really needed, but it can handle erroneous data sets in terms of containing more than one points of a object id with the same timestamp but with different location
-                            comparator = comparator.thenComparingDouble(d->d._2[0].getLongitude());
+                            if(Double.compare(pointLast.getLongitude(),pointBegin.getLongitude())==-1){
+                                comparator = comparator.thenComparingDouble(d->d._2[0].getLongitude());
+                            }else if(Double.compare(pointLast.getLongitude(),pointBegin.getLongitude())==1){
+                                comparator = comparator.thenComparingDouble(d->d._2[0].getLongitude()*(-1));
+                            }
+                            if (Double.compare(pointLast.getLatitude(),pointBegin.getLatitude())==-1) {
+                                comparator = comparator.thenComparingDouble(d->d._2[0].getLatitude());
+                            }else if(Double.compare(pointLast.getLatitude(),pointBegin.getLatitude())==1){
+                                comparator = comparator.thenComparingDouble(d->d._2[0].getLatitude()*(-1));
+                            }
                             passingSegments.sort(comparator);
 
                             for (Tuple2<Long, SpatioTemporalPoint[]> passingSegment : passingSegments) {
@@ -403,15 +414,7 @@ public class DataLoading {
                                 throw new Exception("Point Last should exist, but it is "+pointBegin);
                             }
 
-//                    if(i!=tuple.size()-1) {
                             currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3()));
-//                    }else{
-//                        trajectoryParts.sort(Comparator.comparingLong(d-> d._2.getSpatioTemporalPoints()[0].getTimestamp()));
-//                        currentPart.add(new SpatioTemporalPoint(trajectoryParts.get(trajectoryParts.size()-1)._2.getSpatioTemporalPoints()[trajectoryParts.get(trajectoryParts.size()-1)._2.getSpatioTemporalPoints().length-1].getLongitude(), trajectoryParts.get(trajectoryParts.size()-1)._2.getSpatioTemporalPoints()[trajectoryParts.get(trajectoryParts.size()-1)._2.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryParts.get(trajectoryParts.size()-1)._2.getSpatioTemporalPoints()[trajectoryParts.get(trajectoryParts.size()-1)._2.getSpatioTemporalPoints().length-1].getTimestamp()));
-//                        currentPart.add(new SpatioTemporalPoint(tuple.get(i-1)._1(), tuple.get(i-1)._2(), tuple.get(i-1)._3()));
-//                        currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3()));
-//                    }
-
 
                             currentHilValue = hilbertValue;
                             hil1 = hil2;

@@ -7,6 +7,7 @@ import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.segmentv3.Trajectory;
 import gr.ds.unipi.spatialnodb.messages.common.segmentv3.TrajectoryReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.segmentv5.TrajectorySegment;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
@@ -73,7 +74,7 @@ public class RangeQueries {
                 List<Trajectory> trajectoryList = new ArrayList<>();
                 List<Position> currentCoordinates = new ArrayList<>();
                 List<Long> currentTimestamps =new ArrayList<>();
-                long part = 1;
+                long segment = f.getTrajectoryId();
 
                 BsonArray coordinates = f.getLineString().toBsonDocument().getArray("coordinates");
                 for (int i = 0; i < coordinates.size()-1; i++) {
@@ -120,7 +121,7 @@ public class RangeQueries {
 //                                    throw new Exception("DIFF SIZE");
 //                                }
 
-                                trajectoryList.add(new Trajectory(f.getObjectId(), part++, BsonDocumentWrapper.parse(new LineString(currentCoordinates).toJson()), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                                trajectoryList.add(new Trajectory(f.getObjectId(), segment, BsonDocumentWrapper.parse(new LineString(currentCoordinates).toJson()), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                 currentCoordinates.clear();
                                 currentTimestamps.clear();
                             }
@@ -132,7 +133,7 @@ public class RangeQueries {
 //                    if(currentCoordinates.size()!=currentTimestamps.size()){
 //                        throw new Exception("DIFF SIZE");
 //                    }
-                    trajectoryList.add(new Trajectory(f.getObjectId(), part++, BsonDocumentWrapper.parse(new LineString(currentCoordinates).toJson()), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                    trajectoryList.add(new Trajectory(f.getObjectId(), segment, BsonDocumentWrapper.parse(new LineString(currentCoordinates).toJson()), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                     currentCoordinates.clear();
                     currentTimestamps.clear();
                 }
@@ -143,7 +144,11 @@ public class RangeQueries {
 
                 List<Trajectory> trSegments = new ArrayList<>();
                 f._2.forEach(t->trSegments.add(t._2));
-                trSegments.sort(Comparator.comparingLong(seg->seg.getTimestamps()[0]));
+
+
+                Comparator<Trajectory> comparator = Comparator.comparingLong(d-> d.getTimestamps()[0]);
+                comparator = comparator.thenComparingLong(d-> Math.abs(d.getTrajectoryId()));
+                trSegments.sort(comparator);
 
                 List<Tuple2<Void, Trajectory>> finalList = new ArrayList<>();
                 List<Trajectory> currentMerged = new ArrayList<>();

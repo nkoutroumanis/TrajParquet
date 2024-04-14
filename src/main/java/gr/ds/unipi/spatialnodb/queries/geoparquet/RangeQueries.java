@@ -75,7 +75,7 @@ public class RangeQueries {
                 List<Trajectory> trajectoryList = new ArrayList<>();
                 List<Coordinate> currentCoordinates = new ArrayList<>();
                 List<Long> currentTimestamps =new ArrayList<>();
-                long part = 1;
+                long segment = f.getTrajectoryId();
 
                 Coordinate[] coordinates = f.getLineString().getCoordinates();
                 for (int i = 0; i < coordinates.length-1; i++) {
@@ -115,7 +115,7 @@ public class RangeQueries {
                                 currentCoordinates.add(new Coordinate(stPoints.get()[1].getX(), stPoints.get()[1].getY()));
                                 currentTimestamps.add(stPoints.get()[1].getT());
 
-                                trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                                trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                 currentCoordinates.clear();
                                 currentTimestamps.clear();
                             }else if(stPoints.get()[1].getT() == f.getTimestamps()[i+1]){
@@ -126,7 +126,7 @@ public class RangeQueries {
                                 }
 
                                 if (currentCoordinates.size() != 0) {
-                                    trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                                    trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                     currentCoordinates.clear();
                                     currentTimestamps.clear();
                                 }
@@ -147,7 +147,7 @@ public class RangeQueries {
                                 currentCoordinates.add(new Coordinate(stPoints.get()[1].getX(), stPoints.get()[1].getY()));
                                 currentTimestamps.add(stPoints.get()[1].getT());
 
-                                trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                                trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                 currentCoordinates.clear();
                                 currentTimestamps.clear();
                             }
@@ -156,14 +156,14 @@ public class RangeQueries {
                         }
                     }else{
                         if (currentCoordinates.size() > 0) {
-                            trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                            trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                             currentCoordinates.clear();
                             currentTimestamps.clear();
                         }
                     }
                 }
                 if (currentCoordinates.size() > 0) {
-                    trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
+                    trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                     currentCoordinates.clear();
                     currentTimestamps.clear();
                 }
@@ -175,8 +175,8 @@ public class RangeQueries {
                 List<Trajectory> trSegments = new ArrayList<>();
                 f._2.forEach(t->trSegments.add(t._2));
 
-                Comparator<Trajectory> comparator = Comparator.comparingLong(seg->seg.getTimestamps()[0]);
-                comparator = comparator.thenComparingLong(seg->seg.getTimestamps()[1]);
+                Comparator<Trajectory> comparator = Comparator.comparingLong(d-> d.getTimestamps()[0]);
+                comparator = comparator.thenComparingLong(d-> Math.abs(d.getTrajectoryId()));
                 trSegments.sort(comparator);
 
                 List<Tuple2<Void, Trajectory>> finalList = new ArrayList<>();

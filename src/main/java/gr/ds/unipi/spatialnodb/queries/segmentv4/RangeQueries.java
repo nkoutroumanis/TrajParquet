@@ -67,7 +67,7 @@ public class RangeQueries {
 
                 List<TrajectorySegment> trajectoryList = new ArrayList<>();
                 List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
-                long segment = 1;
+                long segment = f.getSegment();
 
                 SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
                 for (int i = 0; i < spatioTemporalPoints.length - 1; i++) {
@@ -101,7 +101,7 @@ public class RangeQueries {
 //                            System.out.println("HERE "+ spatioTemporalPoints[i].getLongitude()+" "+spatioTemporalPoints[i].getLatitude() +" "+spatioTemporalPoints[i+1].getLongitude() +" "+spatioTemporalPoints[i+1].getLatitude() +" Query "+ queryMinLongitude+" "+ queryMinLatitude+" "+queryMaxLongitude+" "+ queryMaxLatitude);
                         } else {//if the line does not intersect with the spatial part of the query
                             if (currentSpatioTemporalPoints.size() > 0) {
-                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                 currentSpatioTemporalPoints.clear();
                             }
                         }
@@ -109,7 +109,7 @@ public class RangeQueries {
 
                 }
                 if (currentSpatioTemporalPoints.size() > 0) {
-                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                     currentSpatioTemporalPoints.clear();
                 }
                 return trajectoryList.iterator();
@@ -119,7 +119,10 @@ public class RangeQueries {
 
                 List<TrajectorySegment> trSegments = new ArrayList<>();
                 f._2.forEach(t->trSegments.add(t._2));
-                trSegments.sort(Comparator.comparingLong(seg->seg.getSpatioTemporalPoints()[0].getTimestamp()));
+
+                Comparator<TrajectorySegment> comparator = Comparator.comparingLong(d-> d.getSpatioTemporalPoints()[0].getTimestamp());
+                comparator = comparator.thenComparingLong(d-> Math.abs(d.getSegment()));
+                trSegments.sort(comparator);
 
                 List<Tuple2<Void, TrajectorySegment>> finalList = new ArrayList<>();
                 List<TrajectorySegment> currentMerged = new ArrayList<>();

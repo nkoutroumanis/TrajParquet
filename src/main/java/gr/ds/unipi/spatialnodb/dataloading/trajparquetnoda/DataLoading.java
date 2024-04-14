@@ -1,11 +1,11 @@
-package gr.ds.unipi.spatialnodb.dataloading.trajparquetold;
+package gr.ds.unipi.spatialnodb.dataloading.trajparquetnoda;
 
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegmentWriteSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquetnoda.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquetnoda.TrajectorySegment;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquetnoda.TrajectorySegmentWriteSupport;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -22,7 +22,9 @@ import scala.Tuple3;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 public class DataLoading {
     public static void main(String[] args) throws IOException {
@@ -77,11 +79,7 @@ public class DataLoading {
                 }
                 tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
             }
-
-            Comparator<Tuple3<Double, Double, Long>> comparator = Comparator.comparingLong(d-> d._3());
-            comparator = comparator.thenComparingDouble(d-> d._1());
-            comparator = comparator.thenComparingDouble(d-> d._2());
-            tuple.sort(comparator);
+            tuple.sort(Comparator.comparingLong(Tuple3::_3));
 
             String objectId = f._1;
 
@@ -178,10 +176,6 @@ public class DataLoading {
 
                 currentPart.clear();
             }
-
-            Tuple2<Long, TrajectorySegment> trjSeg = trajectoryParts.get(trajectoryParts.size()-1);
-            Tuple2<Long, TrajectorySegment> newTrjSeg = new Tuple2<>(trjSeg._1, new TrajectorySegment(trjSeg._2.getObjectId(), -1* trjSeg._2.getSegment(), trjSeg._2.getSpatioTemporalPoints(), trjSeg._2.getMinLongitude(), trjSeg._2.getMinLatitude(), trjSeg._2.getMinTimestamp(), trjSeg._2.getMaxLongitude(), trjSeg._2.getMaxLatitude(), trjSeg._2.getMaxTimestamp()));
-            trajectoryParts.set(trajectoryParts.size()-1, newTrjSeg);
 
             return trajectoryParts.iterator();
 

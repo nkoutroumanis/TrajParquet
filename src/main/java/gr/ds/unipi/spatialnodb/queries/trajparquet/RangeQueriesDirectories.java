@@ -116,7 +116,7 @@ public class RangeQueriesDirectories {
 
                 List<TrajectorySegment> trajectoryList = new ArrayList<>();
                 List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
-                long segment = 1;
+                long segment = f.getSegment();
 
                 SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
                 for (int i = 0; i < spatioTemporalPoints.length - 1; i++) {
@@ -142,12 +142,11 @@ public class RangeQueriesDirectories {
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 
                             }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
-
                                 if (currentSpatioTemporalPoints.size() == 0) {
                                     currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
-                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                 currentSpatioTemporalPoints.clear();
                             }else if(stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
 
@@ -156,7 +155,7 @@ public class RangeQueriesDirectories {
                                 }
 
                                 if (currentSpatioTemporalPoints.size() != 0) {
-                                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                     currentSpatioTemporalPoints.clear();
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
@@ -167,7 +166,7 @@ public class RangeQueriesDirectories {
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
-                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                 currentSpatioTemporalPoints.clear();
                             }
                         }else{
@@ -176,14 +175,14 @@ public class RangeQueriesDirectories {
 
                     }else{
                         if (currentSpatioTemporalPoints.size() > 0) {
-                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                             currentSpatioTemporalPoints.clear();
                         }
                     }
 
                 }
                 if (currentSpatioTemporalPoints.size() > 0) {
-                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                     currentSpatioTemporalPoints.clear();
                 }
                 return trajectoryList.iterator();
@@ -193,12 +192,13 @@ public class RangeQueriesDirectories {
                         List<TrajectorySegment> trSegments = new ArrayList<>();
                         f._2.forEach(t->trSegments.add(t._2));
 
+//                        Comparator<TrajectorySegment> comparator = Comparator.comparingLong(d-> d.getSpatioTemporalPoints()[0].getTimestamp());
+//                        //the second comparator is not really needed, but it can handle the intersected points of lines with cubes that have the same timestamp.
+//                        comparator = comparator.thenComparingLong(d-> d.getSpatioTemporalPoints()[1].getTimestamp());
+//                        //the third comparator is not really needed, but it can handle erroneous data sets in terms of containing more than one points of a object id with the same timestamp but with different location
+//                        comparator = comparator.thenComparingDouble(d-> d.getSpatioTemporalPoints()[0].getLongitude());
                         Comparator<TrajectorySegment> comparator = Comparator.comparingLong(d-> d.getSpatioTemporalPoints()[0].getTimestamp());
-                        //the second comparator is not really needed, but it can handle the intersected points of lines with cubes that have the same timestamp.
-                        comparator = comparator.thenComparingLong(d-> d.getSpatioTemporalPoints()[1].getTimestamp());
-                        //the third comparator is not really needed, but it can handle erroneous data sets in terms of containing more than one points of a object id with the same timestamp but with different location
-                        comparator = comparator.thenComparingDouble(d-> d.getSpatioTemporalPoints()[0].getLongitude());
-
+                        comparator = comparator.thenComparingLong(d-> Math.abs(d.getSegment()));
                         trSegments.sort(comparator);
 
                         List<Tuple2<Void, TrajectorySegment>> finalList = new ArrayList<>();
@@ -234,6 +234,7 @@ public class RangeQueriesDirectories {
             long numOfPoints = 0;
             for (Tuple2<Void, TrajectorySegment> voidTrajectoryTuple2 : trajs) {
                 numOfPoints = numOfPoints + voidTrajectoryTuple2._2.getSpatioTemporalPoints().length;
+//                    System.out.println(voidTrajectoryTuple2._2.getObjectId()+" "+voidTrajectoryTuple2._2.getSpatioTemporalPoints().length+" "+Arrays.toString(voidTrajectoryTuple2._2.getSpatioTemporalPoints()));
             }
 
             long endTime = System.currentTimeMillis();

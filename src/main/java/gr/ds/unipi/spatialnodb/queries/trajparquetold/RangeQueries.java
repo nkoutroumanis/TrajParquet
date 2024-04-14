@@ -18,10 +18,7 @@ import org.apache.spark.sql.SparkSession;
 import scala.Tuple2;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
@@ -72,7 +69,8 @@ public class RangeQueries {
 
                         List<TrajectorySegment> trajectoryList = new ArrayList<>();
                         List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
-                        long segment = 1;
+//                        long segment = 1;
+                        long segment = f.getSegment();
 
                         SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
                         for (int i = 0; i < spatioTemporalPoints.length - 1; i++) {
@@ -85,8 +83,6 @@ public class RangeQueries {
                                 if(stPoints.get().length==2){
                                     if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp() &&
                                             stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
-//                                    if(stPoints.get()[0].equals(new STPoint(spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp())) &&
-//                                            stPoints.get()[1].equals(new STPoint(spatioTemporalPoints[i+1].getLongitude(),spatioTemporalPoints[i+1].getLatitude(),spatioTemporalPoints[i+1].getTimestamp()))){
                                         if(currentSpatioTemporalPoints.size()!=0){
                                             if(!currentSpatioTemporalPoints.get(currentSpatioTemporalPoints.size()-1).equals(spatioTemporalPoints[i])){
                                                 throw new Exception("The i th element of the segment should be the last point of the current list.");
@@ -99,23 +95,21 @@ public class RangeQueries {
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 
                                     }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
-//                                    }else if(stPoints.get()[0].equals(new STPoint(spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp()))){
 
                                         if (currentSpatioTemporalPoints.size() == 0) {
                                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
-                                        trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                        trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                         currentSpatioTemporalPoints.clear();
                                     }else if(stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
-//                                    }else if(stPoints.get()[1].equals(new STPoint(spatioTemporalPoints[i+1].getLongitude(),spatioTemporalPoints[i+1].getLatitude(),spatioTemporalPoints[i+1].getTimestamp()))){
 
                                         if(currentSpatioTemporalPoints.size()==1){
                                             throw new Exception("Exception for the current list, it will be flushed and has only one element.");
                                         }
 
                                         if (currentSpatioTemporalPoints.size() != 0) {
-                                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                             currentSpatioTemporalPoints.clear();
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
@@ -126,7 +120,7 @@ public class RangeQueries {
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
-                                        trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                        trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                         currentSpatioTemporalPoints.clear();
                                     }
                                 }else{
@@ -134,13 +128,13 @@ public class RangeQueries {
                                 }
                             }else{
                                 if (currentSpatioTemporalPoints.size() > 0) {
-                                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                                    trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                     currentSpatioTemporalPoints.clear();
                                 }
                             }
                         }
                         if (currentSpatioTemporalPoints.size() > 0) {
-                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment++, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                             currentSpatioTemporalPoints.clear();
                         }
                         return trajectoryList.iterator();
@@ -151,8 +145,11 @@ public class RangeQueries {
                         List<TrajectorySegment> trSegments = new ArrayList<>();
                         f._2.forEach(t->trSegments.add(t._2));
 
+//                        Comparator<TrajectorySegment> comparator = Comparator.comparingLong(d-> d.getSpatioTemporalPoints()[0].getTimestamp());
+//                        comparator = comparator.thenComparingLong(d-> d.getSpatioTemporalPoints()[1].getTimestamp());
+//                        comparator = comparator.thenComparingDouble(d-> d.getSpatioTemporalPoints()[0].getLongitude());
                         Comparator<TrajectorySegment> comparator = Comparator.comparingLong(d-> d.getSpatioTemporalPoints()[0].getTimestamp());
-                        comparator = comparator.thenComparingLong(d-> d.getSpatioTemporalPoints()[1].getTimestamp());
+                        comparator = comparator.thenComparingLong(d-> Math.abs(d.getSegment()));
                         trSegments.sort(comparator);
 
                         List<Tuple2<Void, TrajectorySegment>> finalList = new ArrayList<>();

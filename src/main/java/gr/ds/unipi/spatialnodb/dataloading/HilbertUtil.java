@@ -128,7 +128,6 @@ public class HilbertUtil {
         for (int i = 0; i < 6; i++) {
             if (p[i] == 0) {
                 if (q[i] < 0) {
-//                    System.out.println("IT IS NULL 1");
                     return Optional.empty();
                 }
             } else {
@@ -142,7 +141,6 @@ public class HilbertUtil {
         }
 
         if (u1 > u2) {
-//            System.out.println("IT IS NULL 2");
             return Optional.empty();
         }
         double nx0, ny0, nx1, ny1 ;
@@ -177,5 +175,14 @@ public class HilbertUtil {
         }
         return Optional.of(stPoints.toArray(new STPoint[stPoints.size()]));
 
+    }
+
+    public static boolean inBox(double x, double y, long t, double xMin, double yMin, long tMin, double xMax, double yMax, long tMax){
+        if(Double.compare(x, xMin)==-1 || Double.compare(x, xMax)==1 ||
+                Double.compare(y, yMin)==-1 || Double.compare(y, yMax)==1 ||
+                Long.compare(t, tMin)==-1 || Long.compare(t, tMax)==1){
+            return false;
+        }
+        return true;
     }
 }

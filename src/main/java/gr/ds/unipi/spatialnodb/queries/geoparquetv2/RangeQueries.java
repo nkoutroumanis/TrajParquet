@@ -70,7 +70,7 @@ public class RangeQueries {
 
                 List<Trajectory> trajectoryList = new ArrayList<>();
                 List<Coordinate> currentCoordinates = new ArrayList<>();
-                long part = 1;
+                long segment = f.getTrajectoryId();
 
                 Coordinate[] coordinates = f.getLineStringWithTime().getCoordinates();
 //                System.out.println("COORDINATES"+ Arrays.toString(coordinates));
@@ -107,7 +107,7 @@ public class RangeQueries {
 //                                    throw new Exception("DIFF SIZE");
 //                                }
 
-                                trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])),0,0,0,0,0,0 ));
+                                trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])),0,0,0,0,0,0 ));
                                 currentCoordinates.clear();
                             }
                         }
@@ -115,7 +115,7 @@ public class RangeQueries {
 
                 }
                 if (currentCoordinates.size() > 0) {
-                    trajectoryList.add(new Trajectory(f.getObjectId(), part++, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])),0,0,0,0,0,0 ));
+                    trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])),0,0,0,0,0,0 ));
                     currentCoordinates.clear();
                 }
 
@@ -127,7 +127,10 @@ public class RangeQueries {
 
                 List<Trajectory> trSegments = new ArrayList<>();
                 f._2.forEach(t->trSegments.add(t._2));
-                trSegments.sort(Comparator.comparingDouble(seg->seg.getLineStringWithTime().getCoordinates()[0].z));
+
+                Comparator<Trajectory> comparator = Comparator.comparingDouble(d-> d.getLineStringWithTime().getCoordinates()[0].z);
+                comparator = comparator.thenComparingLong(d-> Math.abs(d.getTrajectoryId()));
+                trSegments.sort(comparator);
 
                 List<Tuple2<Void, Trajectory>> finalList = new ArrayList<>();
                 List<Trajectory> currentMerged = new ArrayList<>();

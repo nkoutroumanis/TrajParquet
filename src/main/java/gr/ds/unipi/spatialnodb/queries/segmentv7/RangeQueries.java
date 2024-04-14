@@ -85,7 +85,9 @@ public class RangeQueries {
                             }
                         });
 
-                        trSegments.sort(Comparator.comparingLong(seg->seg.getSpatioTemporalPoints()[0].getTimestamp()));
+                        Comparator<TrajectorySegment> comparator = Comparator.comparingLong(d-> d.getSpatioTemporalPoints()[0].getTimestamp());
+                        comparator = comparator.thenComparingLong(d-> Math.abs(d.getSegment()));
+                        trSegments.sort(comparator);
 
                         List<Tuple2<Void, TrajectorySegment>> finalList = new ArrayList<>();
                         List<TrajectorySegment> currentMerged = new ArrayList<>();
