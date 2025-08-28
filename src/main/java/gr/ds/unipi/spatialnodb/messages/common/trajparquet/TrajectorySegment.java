@@ -96,7 +96,6 @@ public class TrajectorySegment implements Serializable {
 
         }
 
-
         this.minLongitude = -1;
         this.minLatitude = -1;
         this.minTimestamp = -1;

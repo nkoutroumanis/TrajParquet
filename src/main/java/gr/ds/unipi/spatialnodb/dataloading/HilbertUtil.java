@@ -1,5 +1,6 @@
 package gr.ds.unipi.spatialnodb.dataloading;
 
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.shapes.Point;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 
@@ -73,12 +74,10 @@ public class HilbertUtil {
                 double intersectionX = x1 + (uA * (x2-x1));
                 double intersectionY = y1 + (uA * (y2-y1));
 
-                if((Double.compare(x1,intersectionX) ==0 && Double.compare(y1,intersectionY) ==0)
-                        || (Double.compare(x2,intersectionX) ==0 && Double.compare(y2,intersectionY) ==0) ){
-//                System.out.println(intersectionX);
-//                System.out.println(intersectionY);
-                    return false;
-                }
+                //                System.out.println(intersectionX);
+                //                System.out.println(intersectionY);
+                return (Double.compare(x1, intersectionX) != 0 || Double.compare(y1, intersectionY) != 0)
+                        && (Double.compare(x2, intersectionX) != 0 || Double.compare(y2, intersectionY) != 0);
 
             }
             return true;
@@ -106,11 +105,8 @@ public class HilbertUtil {
 
 
     public static boolean pointInRectangle(double x, double y, double xmin, double ymin, double xmax, double ymax) {
-        if(Double.compare(x,xmax)==-1 &&  Double.compare(x,xmin)!=-1
-                && Double.compare(y,ymax)==-1 &&  Double.compare(y,ymin)!=-1){
-            return true;
-        }
-        return false;
+        return Double.compare(x, xmax) == -1 && Double.compare(x, xmin) != -1
+                && Double.compare(y, ymax) == -1 && Double.compare(y, ymin) != -1;
     }
 
 
@@ -122,8 +118,8 @@ public class HilbertUtil {
         double dx = lineX1 - lineX0, dy = lineY1 - lineY0;
         long dt = lineT1 - lineT0;
 
-        double p[] = {-dx, dx, -dy, dy, -dt, dt};
-        double q[] = {lineX0 - xMin, xMax - lineX0, lineY0 - yMin, yMax - lineY0, lineT0 - tMin, tMax - lineT0};
+        double[] p = {-dx, dx, -dy, dy, -dt, dt};
+        double[] q = {lineX0 - xMin, xMax - lineX0, lineY0 - yMin, yMax - lineY0, lineT0 - tMin, tMax - lineT0};
 
         for (int i = 0; i < 6; i++) {
             if (p[i] == 0) {
@@ -131,7 +127,7 @@ public class HilbertUtil {
                     return Optional.empty();
                 }
             } else {
-                double u = (double) q[i] / p[i];
+                double u = q[i] / p[i];
                 if (p[i] < 0) {
                     u1 = Math.max(u, u1);
                 } else {
@@ -178,10 +174,49 @@ public class HilbertUtil {
     }
 
     public static boolean inBox(double x, double y, long t, double xMin, double yMin, long tMin, double xMax, double yMax, long tMax){
-        if(Double.compare(x, xMin)==-1 || Double.compare(x, xMax)==1 ||
-                Double.compare(y, yMin)==-1 || Double.compare(y, yMax)==1 ||
-                Long.compare(t, tMin)==-1 || Long.compare(t, tMax)==1){
-            return false;
+        return Double.compare(x, xMin) != -1 && Double.compare(x, xMax) != 1 &&
+                Double.compare(y, yMin) != -1 && Double.compare(y, yMax) != 1 &&
+                Long.compare(t, tMin) != -1 && Long.compare(t, tMax) != 1;
+    }
+
+    public static double euclideanDistance(double x1, double y1, double x2, double y2) {
+        return (Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2)));
+    }
+
+    public static double frechetDistance(SpatioTemporalPoint[] spt1, SpatioTemporalPoint[] spt2) {
+            double[] arr = new double[spt1.length];
+            arr[0] = HilbertUtil.euclideanDistance(spt1[0].getLongitude(), spt1[0].getLatitude(), spt2[0].getLongitude(), spt2[0].getLatitude());
+            for (int i = 1; i < spt1.length; i++) {
+                arr[i] = Math.max(arr[i-1],HilbertUtil.euclideanDistance(spt1[i].getLongitude(), spt1[i].getLatitude(), spt2[0].getLongitude(), spt2[0].getLatitude()));
+            }
+
+            double diagonal;
+            double value;
+            for (int j = 1; j < spt2.length; j++) {
+                diagonal = arr[0];
+                arr[0] = Math.max(HilbertUtil.euclideanDistance(spt1[0].getLongitude(), spt1[0].getLatitude(), spt2[j].getLongitude(), spt2[j].getLatitude()),diagonal);
+
+                for (int i = 1; i < spt1.length; i++) {
+                    value = Math.max(HilbertUtil.euclideanDistance(spt1[i].getLongitude(), spt1[i].getLatitude(), spt2[j].getLongitude(), spt2[j].getLatitude()) ,Math.min(arr[i-1],Math.min(arr[i],diagonal)));
+                    diagonal = arr[i];
+                    arr[i] = value;
+                }
+            }
+            return arr[spt1.length-1];
+    }
+
+    public static double minDist(double xMin, double yMin, double xMax, double yMax,
+                                 double px, double py) {
+        double dx = Math.max(Math.max(xMin - px, 0), px - xMax);
+        double dy = Math.max(Math.max(yMin - py, 0), py - yMax);
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    public static boolean isMinDistGreaterThan(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints, double epsilon) {
+        double minDist = Double.MAX_VALUE;
+        for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
+            minDist = Double.min(minDist, minDist(xMin, yMin, xMax, yMax,spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude()));
+            if(Double.compare(minDist, epsilon) != 1){return false;}
         }
         return true;
     }

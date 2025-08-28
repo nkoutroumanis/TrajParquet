@@ -1,6 +1,12 @@
 package gr.ds.unipi.spatialnodb.dataloading.trajparquet;
 
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigRenderOptions;
+import com.typesafe.config.ConfigValueFactory;
+
+import java.io.File;
+import java.io.FileWriter;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.hadoop.MultipleParquetOutputsFormat;
@@ -31,10 +37,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
+import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
+
 public class DataLoadingDirectories {
     public static void main(String[] args) throws IOException {
 
-        Config config = AppConfig.newAppConfig(args[0]/*"src/main/resources/app-new.conf"*/).getConfig();
+        Config config = loadConfig("data-loading.conf");
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -333,6 +341,27 @@ public class DataLoadingDirectories {
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
+
+        Config metadataFile = ConfigFactory.empty()
+                .withValue("3d-grid-hilbert.bits", ConfigValueFactory.fromAnyRef(bits))
+                .withValue("3d-grid-hilbert.boundaries.minLon", ConfigValueFactory.fromAnyRef(minLon))
+                .withValue("3d-grid-hilbert.boundaries.minLat", ConfigValueFactory.fromAnyRef(minLat))
+                .withValue("3d-grid-hilbert.boundaries.minTime", ConfigValueFactory.fromAnyRef(minTime))
+                .withValue("3d-grid-hilbert.boundaries.maxLon", ConfigValueFactory.fromAnyRef(maxLon))
+                .withValue("3d-grid-hilbert.boundaries.maxLat", ConfigValueFactory.fromAnyRef(maxLat))
+                .withValue("3d-grid-hilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime));
+
+        String json = metadataFile.root().render(
+                ConfigRenderOptions.defaults()
+                        .setJson(true)
+                        .setFormatted(true).setComments(false)
+        );
+
+        try (FileWriter fw = new FileWriter(writePath+ File.separator+"metadata.json")) {
+            fw.write(json);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
     }
 

@@ -174,7 +174,7 @@ public class RangeQueriesDirectoriesImprovedActualPoints {
                     });
 
             if(sbFullyCovers.length()!=0){
-                pairRDDRangeQuery = pairRDDRangeQuery.union(jsc.newAPIHadoopFile(sbFullyCovers.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration()));
+                pairRDDRangeQuery = pairRDDRangeQuery.union((JavaPairRDD<Void, TrajectorySegment>)jsc.newAPIHadoopFile(sbFullyCovers.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration()));
             }
 
             pairRDDRangeQuery = pairRDDRangeQuery.groupBy(f->f._2.getObjectId()).flatMapToPair(f->{
