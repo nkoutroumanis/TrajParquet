@@ -57,16 +57,20 @@ public class HilbertUtilTest {
 
         int bits = 1;
         SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
-        long maxOrdinates = 1L << bits;
+        long maxOrdinates = hilbertCurve.maxOrdinate();
+//        long maxOrdinates = 1L << bits;
 
         long[] hil = HilbertUtil.scaleGeoTemporalPoint(1, 0, 100, 1, 0, 100, 1, 0l, 100l, maxOrdinates);
+        long[] hil1 = HilbertUtil.scaleGeoTemporalPoint(99, 0, 100, 99, 0, 100, 99, 0l, 100l, maxOrdinates);
 
         Ranges ranges = hilbertCurve.query(hil, hil, 0);
         for (Range range : ranges) {
             System.out.println(range.low() + " - " + range.high());
         }
         long hilbertValue = ranges.toList().get(0).low();
-        System.out.println("hilbert: " + hilbertValue);
+        System.out.println(0+(100-0)/(maxOrdinates+1)+"hilbert: " + hilbertValue);
+        System.out.println(maxOrdinates);
+
     }
 
 

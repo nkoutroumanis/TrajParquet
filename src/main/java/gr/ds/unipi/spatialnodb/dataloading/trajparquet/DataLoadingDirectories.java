@@ -195,7 +195,7 @@ public class DataLoadingDirectories {
                     double maxLatitude = -Double.MAX_VALUE;
                     long maxTimestamp = Long.MIN_VALUE;
 
-                    for (int j = 0; j < currentPart.size(); j++) {
+                    for (int j=0; j < currentPart.size()-1; j++) {
                         if (Double.compare(minLongitude, currentPart.get(j).getLongitude()) == 1) {
                             minLongitude = currentPart.get(j).getLongitude();
                         }
@@ -281,7 +281,7 @@ public class DataLoadingDirectories {
                 double maxLatitude = -Double.MAX_VALUE;
                 long maxTimestamp = Long.MIN_VALUE;
 
-                for (int j = 0; j < currentPart.size(); j++) {
+                for (int j=0; j < currentPart.size(); j++) {
                     if (Double.compare(minLongitude, currentPart.get(j).getLongitude()) == 1) {
                         minLongitude = currentPart.get(j).getLongitude();
                     }

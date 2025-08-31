@@ -173,6 +173,85 @@ public class HilbertUtil {
 
     }
 
+    public static boolean doesTrajectoryIntersectWithCube(SpatioTemporalPoint[] spt, double xMin, double yMin, double xMax, double yMax){
+        for (int i = 0; i < spt.length-1; i++) {
+            if(doesLineIntersectWithCube(spt[i].getLongitude(), spt[i].getLatitude(),spt[i+1].getLongitude(), spt[i+1].getLatitude(), xMin, yMin, xMax, yMax )){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isTrajectoryDistanceLessThanEpsilonToCube(SpatioTemporalPoint[] spt, double xMin, double yMin, double xMax, double yMax, double epsilon){
+        for (int i = 0; i < spt.length-1; i++) {
+            if(Double.compare(minDistSegmentToRectangle(spt[i].getLongitude(), spt[i].getLatitude(),spt[i+1].getLongitude(), spt[i+1].getLatitude(), xMin, yMin, xMax, yMax ), epsilon) != 1){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean doesLineIntersectWithCube(double lineX0, double lineY0, double lineX1, double lineY1,
+                                                    double xMin, double yMin, double xMax, double yMax){
+        double u1 = 0, u2 = 1;
+
+        double dx = lineX1 - lineX0, dy = lineY1 - lineY0;
+
+        double[] p = {-dx, dx, -dy, dy};
+        double[] q = {lineX0 - xMin, xMax - lineX0, lineY0 - yMin, yMax - lineY0};
+
+        for (int i = 0; i < 4; i++) {
+            if (p[i] == 0) {
+                if (q[i] < 0) {
+                    return false;
+                }
+            } else {
+                double u = q[i] / p[i];
+                if (p[i] < 0) {
+                    u1 = Math.max(u, u1);
+                } else {
+                    u2 = Math.min(u, u2);
+                }
+            }
+        }
+
+        if (u1 > u2) {
+            return false;
+        }
+        return true;
+    }
+
+    public static boolean doesLineIntersectWithCube(double lineX0, double lineY0, long lineT0, double lineX1, double lineY1, long lineT1,
+                                                  double xMin, double yMin, long tMin, double xMax, double yMax, long tMax){
+        double u1 = 0, u2 = 1;
+
+        double dx = lineX1 - lineX0, dy = lineY1 - lineY0;
+        long dt = lineT1 - lineT0;
+
+        double[] p = {-dx, dx, -dy, dy, -dt, dt};
+        double[] q = {lineX0 - xMin, xMax - lineX0, lineY0 - yMin, yMax - lineY0, lineT0 - tMin, tMax - lineT0};
+
+        for (int i = 0; i < 6; i++) {
+            if (p[i] == 0) {
+                if (q[i] < 0) {
+                    return false;
+                }
+            } else {
+                double u = q[i] / p[i];
+                if (p[i] < 0) {
+                    u1 = Math.max(u, u1);
+                } else {
+                    u2 = Math.min(u, u2);
+                }
+            }
+        }
+
+        if (u1 > u2) {
+            return false;
+        }
+        return true;
+    }
+
     public static boolean inBox(double x, double y, long t, double xMin, double yMin, long tMin, double xMax, double yMax, long tMax){
         return Double.compare(x, xMin) != -1 && Double.compare(x, xMax) != 1 &&
                 Double.compare(y, yMin) != -1 && Double.compare(y, yMax) != 1 &&
@@ -205,17 +284,45 @@ public class HilbertUtil {
             return arr[spt1.length-1];
     }
 
-    public static double minDist(double xMin, double yMin, double xMax, double yMax,
-                                 double px, double py) {
+    //assumes that the segment does not intersect with rectangle
+    public static double minDistSegmentToRectangle(double x1, double y1, double x2, double y2,  double xMin, double yMin, double xMax, double yMax){
+        double dist = Double.MAX_VALUE;
+
+        // Endpoints of segment to rectangle
+        dist = Math.min(dist, minDistPointToRectangle(x1, y1, xMin, yMin, xMax, yMax));
+        dist = Math.min(dist, minDistPointToRectangle(x2, y2, xMin, yMin, xMax, yMax));
+
+        // Rectangle corners to segment
+        dist = Math.min(dist, minDistPointToSegment(xMin, yMin, x1, y1, x2, y2));
+        dist = Math.min(dist, minDistPointToSegment(xMax, yMin, x1, y1, x2, y2));
+        dist = Math.min(dist, minDistPointToSegment(xMin, yMax, x1, y1, x2, y2));
+        dist = Math.min(dist, minDistPointToSegment(xMax, yMax, x1, y1, x2, y2));
+
+        return dist;
+    }
+
+    static double minDistPointToSegment(double px, double py, double x1, double y1, double x2, double y2) {
+        double dx = x2 - x1, dy = y2 - y1;
+        if (dx == 0 && dy == 0) return Math.sqrt(Math.pow(px - x1, 2) + Math.pow(py - y1, 2));
+
+        double t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+        t = Math.max(0, Math.min(1, t));
+        double projX = x1 + t * dx, projY = y1 + t * dy;
+        return Math.sqrt(Math.pow(px - projX, 2) + Math.pow(py - projY, 2));
+    }
+
+
+    public static double minDistPointToRectangle(double px, double py, double xMin, double yMin, double xMax, double yMax) {
         double dx = Math.max(Math.max(xMin - px, 0), px - xMax);
         double dy = Math.max(Math.max(yMin - py, 0), py - yMax);
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    //points distance to cube
     public static boolean isMinDistGreaterThan(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints, double epsilon) {
         double minDist = Double.MAX_VALUE;
         for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
-            minDist = Double.min(minDist, minDist(xMin, yMin, xMax, yMax,spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude()));
+            minDist = Double.min(minDist, minDistPointToRectangle(spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude(), xMin, yMin, xMax, yMax));
             if(Double.compare(minDist, epsilon) != 1){return false;}
         }
         return true;

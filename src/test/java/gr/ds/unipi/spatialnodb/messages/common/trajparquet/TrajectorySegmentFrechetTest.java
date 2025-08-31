@@ -7,7 +7,7 @@ public class TrajectorySegmentFrechetTest extends TestCase {
 
     public void testFrechetOfTwoTrajectories() {
 
-        SpatioTemporalPoint[] spt1 = new SpatioTemporalPoint[4];
+        SpatioTemporalPoint[] spt1 = new SpatioTemporalPoint[2];
 //        spt1[0] = new SpatioTemporalPoint(0.2,2,0);
 //        spt1[1] = new SpatioTemporalPoint(1.5,2.8,0);
 //        spt1[2] = new SpatioTemporalPoint(2.3,1.6,0);
@@ -16,13 +16,11 @@ public class TrajectorySegmentFrechetTest extends TestCase {
 //        spt1[5] = new SpatioTemporalPoint(5.6,2.9,0);
 //        spt1[6] = new SpatioTemporalPoint(7.2,1.3,0);
 //        spt1[7] = new SpatioTemporalPoint(8.2,1.1,0);
-        spt1[0] = new SpatioTemporalPoint(2,1,0);
-        spt1[1] = new SpatioTemporalPoint(3,1,0);
-        spt1[2] = new SpatioTemporalPoint(4,2,0);
-        spt1[3] = new SpatioTemporalPoint(5,1,0);
+        spt1[0] = new SpatioTemporalPoint(0,0,0);
+        spt1[1] = new SpatioTemporalPoint(2,2,0);
 
 
-        SpatioTemporalPoint[] spt2 = new SpatioTemporalPoint[3];
+        SpatioTemporalPoint[] spt2 = new SpatioTemporalPoint[2];
 //        spt2[0] = new SpatioTemporalPoint(0.3,1.6,0);
 //        spt2[1] = new SpatioTemporalPoint(3.2,3,0);
 //        spt2[2] = new SpatioTemporalPoint(3.8,1.8,0);
@@ -30,9 +28,10 @@ public class TrajectorySegmentFrechetTest extends TestCase {
 //        spt2[4] = new SpatioTemporalPoint(6.5,2.8,0);
 //        spt2[5] = new SpatioTemporalPoint(7,0.8,0);
 //        spt2[6] = new SpatioTemporalPoint(8.9,0.6,0);
-        spt2[0] = new SpatioTemporalPoint(2,0,0);
-        spt2[1] = new SpatioTemporalPoint(3,0,0);
-        spt2[2] = new SpatioTemporalPoint(4,0,0);
+        spt2[0] = new SpatioTemporalPoint(0,1,0);
+        spt2[1] = new SpatioTemporalPoint(0,2,0);
+
+        spt2[2] = new SpatioTemporalPoint(2,2,0);
 
         double[] arr = new double[spt1.length];
         arr[0] = HilbertUtil.euclideanDistance(spt1[0].getLongitude(), spt1[0].getLatitude(), spt2[0].getLongitude(), spt2[0].getLatitude());
