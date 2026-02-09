@@ -189,6 +189,7 @@ public class QueriesDirectoriesFrechetIndex {
                             }
                         }
 
+                        //check if the following condition is really needed
                         if((f._2.getSpatioTemporalPoints().length>2 || !(f._2.getSegment()>1)) && HilbertUtil.isMinDistGreaterThan(f._2.getMinLongitude(), f._2.getMinLatitude(), f._2.getMaxLongitude(), f._2.getMaxLatitude(), trajectoryQuery, epsilon)){
                             return false;
                         }
@@ -243,7 +244,6 @@ public class QueriesDirectoriesFrechetIndex {
                             return false;
                         }
                     })
-
                     .filter(f->{if (f._2.getSpatioTemporalPoints().length>trajectoryQuery.length){
                             if(Double.compare(HilbertUtil.frechetDistance(trajectoryQuery, f._2.getSpatioTemporalPoints()),epsilon)!=1){
                                 return true;
@@ -269,7 +269,6 @@ public class QueriesDirectoriesFrechetIndex {
                 numOfPoints = numOfPoints + voidTrajectoryTuple2._2.getSpatioTemporalPoints().length;
             }
             System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
-
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
 

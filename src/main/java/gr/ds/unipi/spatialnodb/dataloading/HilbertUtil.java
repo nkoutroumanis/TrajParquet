@@ -263,6 +263,11 @@ public class HilbertUtil {
     }
 
     public static double frechetDistance(SpatioTemporalPoint[] spt1, SpatioTemporalPoint[] spt2) {
+
+            if(spt1.length > spt2.length){
+                return frechetDistance(spt2, spt1);
+            }
+
             double[] arr = new double[spt1.length];
             arr[0] = HilbertUtil.euclideanDistance(spt1[0].getLongitude(), spt1[0].getLatitude(), spt2[0].getLongitude(), spt2[0].getLatitude());
             for (int i = 1; i < spt1.length; i++) {
@@ -326,5 +331,13 @@ public class HilbertUtil {
             if(Double.compare(minDist, epsilon) != 1){return false;}
         }
         return true;
+    }
+
+    public static double trajectoryMinDist(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints) {
+        double minDist = Double.MAX_VALUE;
+        for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
+            minDist = Double.min(minDist, minDistPointToRectangle(spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude(), xMin, yMin, xMax, yMax));
+        }
+        return minDist;
     }
 }
