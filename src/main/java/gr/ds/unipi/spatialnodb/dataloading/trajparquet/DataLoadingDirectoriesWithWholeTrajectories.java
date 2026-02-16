@@ -4,11 +4,9 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigValueFactory;
-
-import java.io.File;
-import java.io.FileWriter;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.hadoop.MultipleParquetOutputsFormat;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.Bounds;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWriteSupport;
@@ -19,6 +17,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.HashPartitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.SparkSession;
@@ -28,17 +27,17 @@ import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 import scala.Tuple3;
+import scala.Tuple6;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
-public class DataLoadingDirectories {
+public class DataLoadingDirectoriesWithWholeTrajectories {
     public static void main(String[] args) throws IOException {
 
         Config config = loadConfig("data-loading.conf");
@@ -56,12 +55,6 @@ public class DataLoadingDirectories {
         Config hilbert = dataLoading.getConfig("hilbert");
 
         final int bits = hilbert.getInt("bits");
-        final double minLon = hilbert.getDouble("minLon");
-        final double minLat = hilbert.getDouble("minLat");
-        final long minTime = hilbert.getLong("minTime");
-        final double maxLon = hilbert.getDouble("maxLon");
-        final double maxLat = hilbert.getDouble("maxLat");
-        final long maxTime = hilbert.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
@@ -73,45 +66,105 @@ public class DataLoadingDirectories {
         ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWriteSupport.class);
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
-        SparkConf sparkConf = new SparkConf()/*.setMaster("local[1]").set("spark.executor.memory","1g")*/.registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+        SparkConf sparkConf = new SparkConf().setMaster("local[*]").set("spark.executor.memory","4g").registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
         Broadcast smallHilbertCurveBr = jsc.broadcast(hilbertCurve);
         long startTime = System.currentTimeMillis();
 
-        JavaPairRDD rdd = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex])
-                .flatMapToPair(f-> {
-            List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
-            for (String[] strings : f._2) {
+        JavaRDD<TrajectorySegment> trajectoriesRDD = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex]).map(f->{
+
+            String objectId = ((Tuple2<String, Iterable<String[]>>) f)._1;
+            int counter = 0;
+            Iterator<String[]> it = ((Tuple2<String, Iterable<String[]>>) f)._2.iterator();
+            while(it.hasNext()) {
+                counter++;
+                it.next();
+            }
+
+            SpatioTemporalPoint[] spts = new SpatioTemporalPoint[counter];
+            counter = 0;
+            it = ((Tuple2<String, Iterable<String[]>>) f)._2.iterator();
+            while(it.hasNext()) {
+                String[] strings = it.next();
                 long timestamp = -1;
                 try {
                     timestamp = sdf.parse(strings[timeIndex]).getTime();
                 }catch (Exception e){
-                    continue;
+                    e.printStackTrace();
                 }
-                tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
+                spts[counter++] = new SpatioTemporalPoint(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp);
             }
 
-            Comparator<Tuple3<Double, Double, Long>> comp = Comparator.comparingLong(d-> d._3());
-            comp = comp.thenComparingDouble(d-> d._1());
-            comp = comp.thenComparingDouble(d-> d._2());
-            tuple.sort(comp);
+            Comparator<SpatioTemporalPoint> comp = Comparator.comparingLong(d-> d.getTimestamp());
+            comp = comp.thenComparingDouble(d-> d.getLongitude());
+            comp = comp.thenComparingDouble(d-> d.getLatitude());
+            Arrays.sort(spts, comp);
 
-            String objectId = f._1;
+            double minLongitude = Double.MAX_VALUE;
+            double minLatitude = Double.MAX_VALUE;
+            long minTimestamp = Long.MAX_VALUE;
 
+            double maxLongitude = -Double.MAX_VALUE;
+            double maxLatitude = -Double.MAX_VALUE;
+            long maxTimestamp = Long.MIN_VALUE;
+
+            for(int j=0; j < spts.length; j++) {
+                if (Double.compare(minLongitude, spts[j].getLongitude()) == 1) {
+                    minLongitude = spts[j].getLongitude();
+                }
+                if (Double.compare(minLatitude, spts[j].getLatitude()) == 1) {
+                    minLatitude =spts[j].getLatitude();
+                }
+                if (Long.compare(minTimestamp, spts[j].getTimestamp()) == 1) {
+                    minTimestamp = spts[j].getTimestamp();
+                }
+                if (Double.compare(maxLongitude, spts[j].getLongitude()) == -1) {
+                    maxLongitude = spts[j].getLongitude();
+                }
+                if (Double.compare(maxLatitude, spts[j].getLatitude()) == -1) {
+                    maxLatitude = spts[j].getLatitude();
+                }
+                if (Long.compare(maxTimestamp, spts[j].getTimestamp()) == -1) {
+                    maxTimestamp = spts[j].getTimestamp();
+                }
+            }
+            return new TrajectorySegment(objectId, 0, spts, minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp);
+        }).cache();
+
+        trajectoriesRDD.mapToPair(f-> Tuple2.apply(f.getObjectId(), f)).sortByKey().mapToPair(f->Tuple2.apply(null, f._2)).saveAsNewAPIHadoopFile(writePath+File.separator+"idIndex", Void.class, TrajectorySegment.class, ParquetOutputFormat.class, job.getConfiguration());
+
+        Bounds bounds = trajectoriesRDD.aggregate(
+                        new Bounds(),
+                        (acc, ts) -> { acc.add(ts); return acc; },
+                        (a, b) -> { a.merge(b); return a; }
+                );
+
+        final double minLon = bounds.getMinLongitude();
+        final double minLat = bounds.getMinLatitude();
+        final long minTime = bounds.getMinTimestamp();
+        final double maxLon = bounds.getMaxLongitude()+0.0000001;
+        final double maxLat = bounds.getMaxLatitude()+0.0000001;
+        final long maxTime = bounds.getMaxTimestamp()+1000;
+
+        JavaPairRDD segmentedTrajectoriesRDD = trajectoriesRDD.flatMapToPair(f-> {
+            
+            String objectId = f.getObjectId();
+            SpatioTemporalPoint[] spts = f.getSpatioTemporalPoints();
+            
             List<Tuple2<Long, TrajectorySegment>> trajectoryParts = new ArrayList<>();
             List<SpatioTemporalPoint> currentPart = new ArrayList<>();
 
             //initialize for the currentHilValue
             int part = 1;
-            long[] hil1 = HilbertUtil.scaleGeoTemporalPoint(tuple.get(0)._1(), minLon, maxLon, tuple.get(0)._2(), minLat, maxLat, tuple.get(0)._3(), minTime, maxTime, maxOrdinates);
+            long[] hil1 = HilbertUtil.scaleGeoTemporalPoint(spts[0].getLongitude(), minLon, maxLon, spts[0].getLatitude(), minLat, maxLat, spts[0].getTimestamp(), minTime, maxTime, maxOrdinates);
             Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil1, hil1, 0);
             long currentHilValue = ranges.toList().get(0).low();
-            currentPart.add(new SpatioTemporalPoint(tuple.get(0)._1(), tuple.get(0)._2(),tuple.get(0)._3()));
+            currentPart.add(new SpatioTemporalPoint(spts[0].getLongitude(), spts[0].getLatitude(),spts[0].getTimestamp()));
 
-            for (int i = 1; i < tuple.size(); i++) {
-                long[] hil2 = HilbertUtil.scaleGeoTemporalPoint(tuple.get(i)._1(), minLon, maxLon, tuple.get(i)._2(), minLat, maxLat, tuple.get(i)._3(), minTime, maxTime, maxOrdinates);
+            for (int i = 1; i < spts.length; i++) {
+                long[] hil2 = HilbertUtil.scaleGeoTemporalPoint(spts[i].getLongitude(), minLon, maxLon, spts[i].getLatitude(), minLat, maxLat, spts[i].getTimestamp(), minTime, maxTime, maxOrdinates);
                 ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil2, hil2, 0);
                 long hilbertValue = ranges.toList().get(0).low();
 
@@ -139,16 +192,16 @@ public class DataLoadingDirectories {
                                 double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
                                 long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
 
-                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(tuple.get(i-1)._1(), tuple.get(i-1)._2(), tuple.get(i-1)._3(), tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3(), xMin, yMin, tMin, xMax, yMax, tMax );
+                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(spts[i-1].getLongitude(), spts[i-1].getLatitude(), spts[i-1].getTimestamp(), spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp(), xMin, yMin, tMin, xMax, yMax, tMax );
 
                                 List<Tuple3<Double, Double, Long>> newPoints = new ArrayList<>();
                                 if(stPoints.isPresent()){
 
-                                    if(Double.compare(stPoints.get()[0].getX(), tuple.get(i-1)._1())!=0 || Double.compare(stPoints.get()[0].getY(), tuple.get(i-1)._2())!=0 || stPoints.get()[0].getT() != tuple.get(i - 1)._3()){
+                                    if(Double.compare(stPoints.get()[0].getX(), spts[i-1].getLongitude())!=0 || Double.compare(stPoints.get()[0].getY(), spts[i-1].getLatitude())!=0 || stPoints.get()[0].getT() != spts[i-1].getTimestamp()){
                                         newPoints.add(new Tuple3<>(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                                     }
 
-                                    if(Double.compare(stPoints.get()[1].getX(),tuple.get(i)._1())!=0 || Double.compare(stPoints.get()[1].getY(), tuple.get(i)._2())!=0 || stPoints.get()[1].getT() != tuple.get(i)._3()){
+                                    if(Double.compare(stPoints.get()[1].getX(),spts[i].getLongitude())!=0 || Double.compare(stPoints.get()[1].getY(), spts[i].getLatitude())!=0 || stPoints.get()[1].getT() != spts[i].getTimestamp()){
                                         newPoints.add(new Tuple3<>(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
                                     }
 
@@ -248,7 +301,7 @@ public class DataLoadingDirectories {
                     for (int i1 = 1; i1 < passingSegments.size(); i1++) {
                         if(passingSegments.get(i1-1)._2[1].getTimestamp() != passingSegments.get(i1)._2[0].getTimestamp() || passingSegments.get(i1-1)._2[1].getLongitude() != passingSegments.get(i1)._2[0].getLongitude() || passingSegments.get(i1-1)._2[1].getLatitude() != passingSegments.get(i1)._2[0].getLatitude()){
                             passingSegments.forEach(pair-> System.out.println(pair._2[0] + "-"+pair._2[1]));
-                            throw new Exception("Problem with the passing segments list. A point seems not to be the same with the first point in the next segment. Object id: "+f._1+" Points: "+passingSegments.get(i1-1)._2[1] + " "+passingSegments.get(i1)._2[0]);
+                            throw new Exception("Problem with the passing segments list. A point seems not to be the same with the first point in the next segment. Object id: "+objectId+" Points: "+passingSegments.get(i1-1)._2[1] + " "+passingSegments.get(i1)._2[0]);
                         }
                     }
 
@@ -261,12 +314,12 @@ public class DataLoadingDirectories {
                         throw new Exception("Point last should exist, but it is "+pointBegin);
                     }
 
-                    currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3()));
+                    currentPart.add(new SpatioTemporalPoint(spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp()));
 
                     currentHilValue = hilbertValue;
                     hil1 = hil2;
                 }else{
-                    currentPart.add(new SpatioTemporalPoint(tuple.get(i)._1(), tuple.get(i)._2(),tuple.get(i)._3()));
+                    currentPart.add(new SpatioTemporalPoint(spts[i].getLongitude(), spts[i].getLatitude(),spts[i].getTimestamp()));
                 }
             }
 
@@ -318,7 +371,7 @@ public class DataLoadingDirectories {
                     System.out.println(trajectoryParts.get(i)._2.getSegment()+" - "+trajectoryParts.get(i)._2.getSpatioTemporalPoints().length+" "+trajectoryParts.get(i+1)._2.getSpatioTemporalPoints().length+" "+trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getTimestamp() +" "+ trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getTimestamp() +" "+
                             trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getLongitude() +" "+ trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getLongitude() +" "+
                             trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getLatitude() +" "+ trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getLatitude());
-                    throw new Exception("Problem concerning the linking of the points in the trajectory segments. Object id: "+f._1+" Total trajectory segments "+trajectoryParts.size());
+                    throw new Exception("Problem concerning the linking of the points in the trajectory segments. Object id: "+objectId+" Total trajectory segments "+trajectoryParts.size());
                 }
             }
 
@@ -336,7 +389,7 @@ public class DataLoadingDirectories {
 
         })
                 .repartitionAndSortWithinPartitions(new HashPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1+"/", null), f._2));
-        rdd.saveAsNewAPIHadoopFile(writePath, Void.class, TrajectorySegment.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
+        segmentedTrajectoriesRDD.saveAsNewAPIHadoopFile(writePath+File.separator+"stIndex", Void.class, TrajectorySegment.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
@@ -357,7 +410,7 @@ public class DataLoadingDirectories {
 
         );
 
-        try (FileWriter fw = new FileWriter(writePath+ File.separator+"metadata.json")) {
+        try (FileWriter fw = new FileWriter(writePath+ File.separator+"space.metadata")) {
             fw.write(json);
         } catch (IOException e) {
             e.printStackTrace();

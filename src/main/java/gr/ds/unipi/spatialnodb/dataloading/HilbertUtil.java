@@ -323,6 +323,27 @@ public class HilbertUtil {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    public static double minMaxDistPointToRectangle(double px, double py, double xMin, double yMin, double xMax, double yMax) {
+        double rmX = (px <= (xMin + xMax) / 2.0) ? xMin : xMax;
+        double rmY = (py <= (yMin + yMax) / 2.0) ? yMin : yMax;
+
+        // rM: farther boundary
+        double rMX = (px <= (xMin + xMax) / 2.0) ? xMax : xMin;
+        double rMY = (py <= (yMin + yMax) / 2.0) ? yMax : yMin;
+
+        // Case 1: x is the maximizing dimension
+        double dx1 = px - rMX;
+        double dy1 = py - rmY;
+        double dist1 = dx1 * dx1 + dy1 * dy1;
+
+        // Case 2: y is the maximizing dimension
+        double dx2 = px - rmX;
+        double dy2 = py - rMY;
+        double dist2 = dx2 * dx2 + dy2 * dy2;
+
+        return Math.sqrt(Math.min(dist1, dist2));
+    }
+
     //points distance to cube
     public static boolean isMinDistGreaterThan(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints, double epsilon) {
         double minDist = Double.MAX_VALUE;
@@ -338,6 +359,26 @@ public class HilbertUtil {
         for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
             minDist = Double.min(minDist, minDistPointToRectangle(spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude(), xMin, yMin, xMax, yMax));
         }
+//        for (int i = 1; i < spatioTemporalPoints.length; i++) {
+//            minDist = Double.min(minDist, minDistSegmentToRectangle(spatioTemporalPoints[i-1].getLongitude(),  spatioTemporalPoints[i-1].getLatitude(), spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(),xMin, yMin, xMax, yMax));
+//        }
         return minDist;
+    }
+
+    public static double trajectoryMinMaxDist(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints) {
+        double minDist = Double.MAX_VALUE;
+        for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
+            minDist = Double.min(minDist, minMaxDistPointToRectangle(spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude(), xMin, yMin, xMax, yMax));
+        }
+        return minDist;
+    }
+
+    public static boolean isMinMaxDistGreaterThan(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints, double epsilon) {
+        double minDist = Double.MAX_VALUE;
+        for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
+            minDist = Double.min(minDist, minMaxDistPointToRectangle(spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude(), xMin, yMin, xMax, yMax));
+            if(Double.compare(minDist, epsilon) != 1){return false;}
+        }
+        return true;
     }
 }

@@ -20,13 +20,9 @@ public class TrajectorySegmentWriteSupport extends WriteSupport<TrajectorySegmen
     MessageType schema = MessageTypeParser.parseMessageType( "message TrajectorySegment {\n" +
             "required BINARY objectId;\n" +
             "required INT64 segment;\n" +
-//            "required BINARY spt;\n" +
             "required BINARY longitude;\n" +
             "required BINARY latitude;\n" +
             "required BINARY timestamps;\n" +
-//            "repeated group timestamps{\n" +
-//            "required INT64 timestamp;\n" +
-//            "}\n" +
             "required DOUBLE minLongitude;\n" +
             "required DOUBLE minLatitude;\n" +
             "required INT64 minTimestamp;\n" +

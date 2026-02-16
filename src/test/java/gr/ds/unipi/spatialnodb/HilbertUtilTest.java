@@ -263,7 +263,7 @@ public class HilbertUtilTest {
 
     @Test
     public void checkCase()  {
-        final int bits = 1;
+        final int bits = 2;
         final double minLon = 0d;
         final double minLat = 0d;
 //        final double minTime = 0d;

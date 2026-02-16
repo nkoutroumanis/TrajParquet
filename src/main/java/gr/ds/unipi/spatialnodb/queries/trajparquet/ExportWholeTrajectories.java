@@ -3,7 +3,6 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.SmallHilbertCurve;
@@ -21,9 +20,9 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
 public class ExportWholeTrajectories {
     public static void main(String[] args) {
-        Config config = loadConfig("data-loading.conf");
+        Config config = loadConfig("export-trajectories.conf");
 
-        Config dataLoading = config.getConfig("data-loading");
+        Config dataLoading = config.getConfig("export-trajectories");
         final String rawDataPath = dataLoading.getString("rawDataPath");
         final String writePath = dataLoading.getString("writePath");
         final int objectIdIndex = dataLoading.getInt("objectIdIndex");
@@ -35,7 +34,7 @@ public class ExportWholeTrajectories {
 
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
-        SparkConf sparkConf = new SparkConf()/*.setMaster("local[1]").set("spark.executor.memory","1g")*/.registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+        SparkConf sparkConf = new SparkConf()/*.setMaster("local[*]").set("spark.executor.memory","1g")*/.registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
@@ -46,7 +45,7 @@ public class ExportWholeTrajectories {
                 try {
                     timestamp = sdf.parse(strings[timeIndex]).getTime();
                 }catch (Exception e){
-                    continue;
+                    e.printStackTrace();
                 }
                 tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
             }

@@ -36,14 +36,15 @@ public class QueriesDirectoriesFrechetCubes {
         final String queriesFileExport = dataLoading.getString("queriesFileExport");
         final double epsilon = dataLoading.getDouble("epsilon");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"metadata.json")).resolve();
-        final int bits = metadata.getInt("3d-grid-hilbert.bits");
-        final double minLon = metadata.getDouble("3d-grid-hilbert.boundaries.minLon");
-        final double minLat = metadata.getDouble("3d-grid-hilbert.boundaries.minLat");
-        final long minTime = metadata.getLong("3d-grid-hilbert.boundaries.minTime");
-        final double maxLon = metadata.getDouble("3d-grid-hilbert.boundaries.maxLon");
-        final double maxLat = metadata.getDouble("3d-grid-hilbert.boundaries.maxLat");
-        final long maxTime = metadata.getLong("3d-grid-hilbert.boundaries.maxTime");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        final int bits = metadata.getInt("bits");
+        Config boundaries = metadata.getConfig("boundaries");
+        final double minLon = boundaries.getDouble("minLon");
+        final double minLat = boundaries.getDouble("minLat");
+        final long minTime = boundaries.getLong("minTime");
+        final double maxLon = boundaries.getDouble("maxLon");
+        final double maxLat = boundaries.getDouble("maxLat");
+        final long maxTime = boundaries.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
@@ -317,19 +318,12 @@ public class QueriesDirectoriesFrechetCubes {
                             return false;
                         }
                     })
-                    .filter(f->{if (f._2.getSpatioTemporalPoints().length>trajectoryQuery.length){
+                    .filter(f->{
                             if(Double.compare(HilbertUtil.frechetDistance(trajectoryQuery, f._2.getSpatioTemporalPoints()),epsilon)!=1){
                                 return true;
                             }else{
                                 return false;
                             }
-                        }else{
-                            if(Double.compare(HilbertUtil.frechetDistance(f._2.getSpatioTemporalPoints(),trajectoryQuery),epsilon)!=1){
-                                return true;
-                            }else{
-                                return false;
-                            }
-                        }
                     });
 
 

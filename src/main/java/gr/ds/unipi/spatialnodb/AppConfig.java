@@ -35,7 +35,6 @@ public class AppConfig {
         }
 
         if (runningFromJar) {
-            // Must provide external config via -Dconfig.file
             String externalPath = System.getProperty("config.file");
             if (externalPath == null) {
                 throw new RuntimeException(

@@ -19,7 +19,7 @@ public class BoundedPriorityQueue {
         if (maxHeap.size() < maxSize) {
             maxHeap.add(ts);
         } else {
-            TrajectoryScore worst = maxHeap.peek(); // O(1), always the highest score
+            TrajectoryScore worst = maxHeap.peek();
             if (ts.getScore() < worst.getScore()) {
                 maxHeap.poll();
                 maxHeap.add(ts);
@@ -33,5 +33,9 @@ public class BoundedPriorityQueue {
 
     public int getSize() {
         return maxHeap.size();
+    }
+
+    public PriorityQueue<TrajectoryScore> getMaxHeap() {
+        return maxHeap;
     }
 }

@@ -1,6 +1,7 @@
 package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
@@ -31,15 +32,15 @@ public class RangeQueriesDirectoriesImprovedActualPoints {
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
         final String queriesFileExport = dataLoading.getString("queriesFileExport");
 
-        Config hilbert = dataLoading.getConfig("hilbert");
-
-        final int bits = hilbert.getInt("bits");
-        final double minLon = hilbert.getDouble("minLon");
-        final double minLat = hilbert.getDouble("minLat");
-        final long minTime = hilbert.getLong("minTime");
-        final double maxLon = hilbert.getDouble("maxLon");
-        final double maxLat = hilbert.getDouble("maxLat");
-        final long maxTime = hilbert.getLong("maxTime");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        final int bits = metadata.getInt("bits");
+        Config boundaries = metadata.getConfig("boundaries");
+        final double minLon = boundaries.getDouble("minLon");
+        final double minLat = boundaries.getDouble("minLat");
+        final long minTime = boundaries.getLong("minTime");
+        final double maxLon = boundaries.getDouble("maxLon");
+        final double maxLat = boundaries.getDouble("maxLat");
+        final long maxTime = boundaries.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
@@ -248,7 +249,5 @@ public class RangeQueriesDirectoriesImprovedActualPoints {
         bw.write(times.stream().mapToLong(Long::longValue).average().getAsDouble()+"");
         bw.close();
         br.close();
-
-
     }
 }
