@@ -9,7 +9,7 @@ import org.apache.parquet.schema.MessageTypeParser;
 
 import java.util.Map;
 
-public class TrajectorySegmentPartialReadSupport extends ReadSupport<TrajectorySegment> {
+public class TrajectorySegmentPartialReadSupport extends ReadSupport<TrajectorySegmentWithMetadata> {
 
     @Override
     public ReadContext init(InitContext context){
@@ -23,12 +23,14 @@ public class TrajectorySegmentPartialReadSupport extends ReadSupport<TrajectoryS
                 "required DOUBLE maxLongitude;\n" +
                 "required DOUBLE maxLatitude;\n" +
                 "required INT64 maxTimestamp;\n" +
+                "optional BINARY pivotsLongitude;\n" +
+                "optional BINARY pivotsLatitude;\n" +
                 "}");
         return new ReadContext(schema);
     }
 
     @Override
-    public RecordMaterializer<TrajectorySegment> prepareForRead(Configuration configuration, Map<String, String> map, MessageType messageType, ReadContext readContext) {
+    public RecordMaterializer<TrajectorySegmentWithMetadata> prepareForRead(Configuration configuration, Map<String, String> map, MessageType messageType, ReadContext readContext) {
         return new TrajectorySegmentPartialMaterializer();
     }
 }

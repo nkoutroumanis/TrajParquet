@@ -57,7 +57,7 @@ public class KnnQueriesDirectories {
         ParquetInputFormat.setReadSupportClass(jobWholeTrajectory, TrajectorySegmentReadSupport.class);
         ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialReadSupport.class);
 
-        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class}).setMaster("local[*]").set("spark.executor.memory","1g");
+        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class,SpatialPoint.class,SpatialPoint[].class}).setMaster("local[*]").set("spark.executor.memory","1g");
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
@@ -174,27 +174,26 @@ public class KnnQueriesDirectories {
                 }
             }
 
-            HashMap<String, List<TrajectorySegment>> identifiedTrajSegments = new HashMap<>();
+            HashMap<String, List<TrajectorySegmentWithMetadata>> identifiedTrajSegments = new HashMap<>();
             HashSet<String> flushedTrajectories = new HashSet<>();
 
             if(sb.length()!=0){
                 sb.deleteCharAt(sb.length()-1);
-                JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobTrajectorySegments.getConfiguration());
+                JavaPairRDD<Void, TrajectorySegmentWithMetadata> pairRDD = (JavaPairRDD<Void, TrajectorySegmentWithMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegmentWithMetadata.class, jobTrajectorySegments.getConfiguration());
                 pairRDD.collect().forEach(seg->{
-                    identifiedTrajSegments.compute(seg._2.getObjectId(), (i, v) -> {
+                    identifiedTrajSegments.compute(seg._2.getTrajectorySegment().getObjectId(), (i, v) -> {
                         if (v == null) {
-                            List<TrajectorySegment> t = new ArrayList<>();
+                            List<TrajectorySegmentWithMetadata> t = new ArrayList<>();
                             t.add(seg._2);
                             return t;
                         } else {
                             v.add(seg._2);
-                            v.sort(Comparator.comparingLong(a -> Math.abs(a.getSegment())));
+                            v.sort(Comparator.comparingLong(a -> Math.abs(a.getTrajectorySegment().getSegment())));
                             return v;
                         }
                     });
                 });
                 flush(identifiedTrajSegments, flushedTrajectories);
-//                flush1(identifiedTrajSegments, flushedTrajectories, trajectoryQuery, k);
             }
 
             BoundedPriorityQueue trajectoryQueue = BoundedPriorityQueue.newBoundedPriorityQueue(k);
@@ -252,8 +251,45 @@ public class KnnQueriesDirectories {
 //                }
 //            }
 
-            while((trajectoryQueue.getSize() < k || queueCells.peek().getScore() < trajectoryQueue.getMaxScore()) && !queueCells.isEmpty()){
-//                q.append(" cell queue score:"+queueCells.peek().getScore() + " cuurent traj queue score:"+trajectoryQueue.getMaxScore()+"\n");
+            while((trajectoryQueue.getSize() < k || queueCells.peek().getScore() < trajectoryQueue.getMaxScore()) && !queueCells.isEmpty()) {
+                if (trajectoryQueue.getSize() == k){
+                    identifiedTrajSegments.entrySet().removeIf(e -> {
+                        for (TrajectorySegmentWithMetadata seg : e.getValue()) {
+
+                            if (HilbertUtil.isMinMaxDistGreaterThan(seg.getTrajectorySegment().getMinLongitude(), seg.getTrajectorySegment().getMinLatitude(), seg.getTrajectorySegment().getMaxLongitude(), seg.getTrajectorySegment().getMaxLatitude(), trajectoryQuery, trajectoryQueue.getMaxScore())) {
+                                return true;
+                            }
+
+                            if (seg.getPivots() != null) {
+                                if (seg.getTrajectorySegment().getSegment() > 1) {
+                                    for (SpatialPoint pivot : seg.getPivots()) {
+                                        if (HilbertUtil.isPointMinDistGreaterThan(pivot.getLongitude(), pivot.getLatitude(), trajectoryQuery, trajectoryQueue.getMaxScore())) {
+                                            return true;
+                                        }
+                                    }
+                                }
+
+                                if (seg.getTrajectorySegment().getSegment() == 1) {
+                                    if (HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length - 1].getLongitude(), seg.getPivots()[seg.getPivots().length - 1].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude()) > trajectoryQueue.getMaxScore()) {
+                                        return true;
+                                    }
+                                } else if (seg.getTrajectorySegment().getSegment() < -1) {
+                                    if (HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length - 1].getLongitude(), seg.getPivots()[seg.getPivots().length - 1].getLatitude(), trajectoryQuery[trajectoryQuery.length - 1].getLongitude(), trajectoryQuery[trajectoryQuery.length - 1].getLatitude()) > trajectoryQueue.getMaxScore()) {
+                                        return true;
+                                    }
+                                } else if (seg.getTrajectorySegment().getSegment() == -1) {
+                                    if (HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length - 2].getLongitude(), seg.getPivots()[seg.getPivots().length - 2].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude()) > trajectoryQueue.getMaxScore()) {
+                                        return true;
+                                    }
+                                    if (HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length - 1].getLongitude(), seg.getPivots()[seg.getPivots().length - 1].getLatitude(), trajectoryQuery[trajectoryQuery.length - 1].getLongitude(), trajectoryQuery[trajectoryQuery.length - 1].getLatitude()) > trajectoryQueue.getMaxScore()) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                        return false;
+                    });
+                }
 
                 long cell = queueCells.poll().getCellId();
                 visitedCubes.add(cell);
@@ -281,72 +317,56 @@ public class KnnQueriesDirectories {
 
                 if(sb.length()!=0){
                     sb.deleteCharAt(sb.length()-1);
-                    JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobTrajectorySegments.getConfiguration());
+                    JavaPairRDD<Void, TrajectorySegmentWithMetadata> pairRDD = (JavaPairRDD<Void, TrajectorySegmentWithMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegmentWithMetadata.class, jobTrajectorySegments.getConfiguration());
 
                     //MBR pruning
                     if(trajectoryQueue.getSize()==k){
                         double l = trajectoryQueue.getMaxScore();
                         pairRDD = pairRDD.filter((tr)->{
-                            TrajectorySegment seg = tr._2;
-                            if (HilbertUtil.isMinMaxDistGreaterThan(seg.getMinLongitude(), seg.getMinLatitude(), seg.getMaxLongitude(), seg.getMaxLatitude(), trajectoryQuery, l)) {
+                            TrajectorySegmentWithMetadata seg = tr._2;
+                            if (HilbertUtil.isMinMaxDistGreaterThan(seg.getTrajectorySegment().getMinLongitude(), seg.getTrajectorySegment().getMinLatitude(), seg.getTrajectorySegment().getMaxLongitude(), seg.getTrajectorySegment().getMaxLatitude(), trajectoryQuery, l)) {
                                 return false;
+                            }
+
+                            if (seg.getPivots() != null) {
+                                if(seg.getTrajectorySegment().getSegment()>1){
+                                    for (SpatialPoint pivot : seg.getPivots()) {
+                                        if(HilbertUtil.isPointMinDistGreaterThan(pivot.getLongitude(), pivot.getLatitude(), trajectoryQuery, l)){
+                                            return false;
+                                        }
+                                    }
+                                }
+
+                                if(seg.getTrajectorySegment().getSegment()==1){
+                                    if(HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length-1].getLongitude(),seg.getPivots()[seg.getPivots().length-1].getLatitude(),trajectoryQuery[0].getLongitude(),trajectoryQuery[0].getLatitude())>l){
+                                        return false;
+                                    }
+                                }else if(seg.getTrajectorySegment().getSegment()<-1){
+                                    if(HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length-1].getLongitude(),seg.getPivots()[seg.getPivots().length-1].getLatitude(),trajectoryQuery[trajectoryQuery.length-1].getLongitude(),trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
+                                        return false;
+                                    }
+                                }else if(seg.getTrajectorySegment().getSegment()==-1){
+                                    if(HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length-2].getLongitude(),seg.getPivots()[seg.getPivots().length-2].getLatitude(),trajectoryQuery[0].getLongitude(),trajectoryQuery[0].getLatitude())>l){
+                                        return false;
+                                    }
+                                    if(HilbertUtil.euclideanDistance(seg.getPivots()[seg.getPivots().length-1].getLongitude(),seg.getPivots()[seg.getPivots().length-1].getLatitude(),trajectoryQuery[trajectoryQuery.length-1].getLongitude(),trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
+                                        return false;
+                                    }
+                                }
                             }
                             return true;
                         });
-
-//                        jobWholeTrajectory.getConfiguration().unset("parquet.private.read.filter.predicate.human.readable");
-//                        jobWholeTrajectory.getConfiguration().unset("parquet.private.read.filter.predicate");
-//                        JavaPairRDD<Void, TrajectorySegment> p = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobWholeTrajectory.getConfiguration());
-//                        p.filter((tr)-> {
-//                            TrajectorySegment seg = tr._2;
-//                            if(tr._2.getSegment()==1){
-//                                if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[0].getLongitude(), seg.getSpatioTemporalPoints()[0].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude())>l){
-//                                    return true;
-//                                }
-//                            }
-//                            if(tr._2.getSegment()<-1){
-//                                if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLongitude(), seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryQuery[trajectoryQuery.length-1].getLongitude(), trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
-//                                    return true;
-//                                }
-//                            }
-//                            return false;
-//                        });
-//
-//                        HashSet names = new HashSet<>();
-//                        List<Tuple2<Void, TrajectorySegment>> o = p.collect();
-//                        if(!o.isEmpty()){
-//                            o.forEach(m->{
-//                                names.add(m._2.getObjectId());
-//                            });
-//                            System.out.println("STOPPED"+o.size()+" "+names.size());
-//                            System.exit(0);
-//                        }
-
-
-//                        double pruning = 0;
-//                        for (TrajectoryScore trajectoryScore : trajectoryQueue.getMaxHeap()) {
-//                            TrajectorySegment seg = trajectoryScore.getTrajectorySegment();
-//                            pruning = Math.max(pruning,Math.max(
-//                                    HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[0].getLongitude(), seg.getSpatioTemporalPoints()[0].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude()),
-//                                    HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLongitude(), seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryQuery[trajectoryQuery.length-1].getLongitude(), trajectoryQuery[trajectoryQuery.length-1].getLatitude())
-//                            ));
-//                        }
-//
-//                        if(pruning>queueCells.peek().getScore()){
-//                            System.out.println("STOPPED");
-//                            System.exit(0);
-//                        }
                     }
 
                     pairRDD.collect().forEach(seg->{
-                        identifiedTrajSegments.compute(seg._2.getObjectId(), (i, v) -> {
+                        identifiedTrajSegments.compute(seg._2.getTrajectorySegment().getObjectId(), (i, v) -> {
                             if (v == null) {
-                                List<TrajectorySegment> t = new ArrayList<>();
+                                List<TrajectorySegmentWithMetadata> t = new ArrayList<>();
                                 t.add(seg._2);
                                 return t;
                             } else {
                                 v.add(seg._2);
-                                v.sort(Comparator.comparingLong(a -> Math.abs(a.getSegment())));
+                                v.sort(Comparator.comparingLong(a -> Math.abs(a.getTrajectorySegment().getSegment())));
                                 return v;
                             }
                         });
@@ -388,27 +408,27 @@ public class KnnQueriesDirectories {
                     if(trajectoryQueue.getSize()==k){
                         double l = trajectoryQueue.getMaxScore();
 
-                        queriedTrajectoriesCounter = queriedTrajectoriesCounter - (int)pairRDD.filter((tr)-> {
-                            TrajectorySegment seg = tr._2;
-                            if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[0].getLongitude(), seg.getSpatioTemporalPoints()[0].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude())>l){
-                                return true;
-                            }
-                            if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLongitude(), seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryQuery[trajectoryQuery.length-1].getLongitude(), trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
-                                return true;
-                            }
-                            return false;
-                        }).count();
+//                        queriedTrajectoriesCounter = queriedTrajectoriesCounter - (int)pairRDD.filter((tr)-> {
+//                            TrajectorySegment seg = tr._2;
+//                            if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[0].getLongitude(), seg.getSpatioTemporalPoints()[0].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude())>l){
+//                                return true;
+//                            }
+//                            if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLongitude(), seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryQuery[trajectoryQuery.length-1].getLongitude(), trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
+//                                return true;
+//                            }
+//                            return false;
+//                        }).count();
 
-                        pairRDD = pairRDD.filter((tr)-> {
-                        TrajectorySegment seg = tr._2;
-                        if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[0].getLongitude(), seg.getSpatioTemporalPoints()[0].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude())>l){
-                            return false;
-                        }
-                        if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLongitude(), seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryQuery[trajectoryQuery.length-1].getLongitude(), trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
-                            return false;
-                        }
-                        return true;
-                    });
+//                        pairRDD = pairRDD.filter((tr)-> {
+//                        TrajectorySegment seg = tr._2;
+//                        if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[0].getLongitude(), seg.getSpatioTemporalPoints()[0].getLatitude(), trajectoryQuery[0].getLongitude(), trajectoryQuery[0].getLatitude())>l){
+//                            return false;
+//                        }
+//                        if(HilbertUtil.euclideanDistance(seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLongitude(), seg.getSpatioTemporalPoints()[seg.getSpatioTemporalPoints().length-1].getLatitude(), trajectoryQuery[trajectoryQuery.length-1].getLongitude(), trajectoryQuery[trajectoryQuery.length-1].getLatitude())>l){
+//                            return false;
+//                        }
+//                        return true;
+//                    });
                     }
                     List<TrajectoryScore> ts = pairRDD.map(t -> TrajectoryScore.newTrajectoryScore(t._2, HilbertUtil.frechetDistance(trajectoryQuery, t._2.getSpatioTemporalPoints()))).collect();
                     ts.forEach(trajectoryQueue::add);
@@ -448,53 +468,18 @@ public class KnnQueriesDirectories {
         br.close();
     }
 
-    private static void flush1(HashMap<String, List<TrajectorySegment>> identifiedTrajectories, HashSet<String> flushedtrajectories, SpatioTemporalPoint[] trajectoryQuery, int k){
-
-        List<Tuple2<Double, String>> trajectories = new ArrayList<>();
-
+    private static void flush(HashMap<String, List<TrajectorySegmentWithMetadata>> identifiedTrajectories, HashSet<String> flushedtrajectories){
         identifiedTrajectories.entrySet().removeIf(e->{
-            if(e.getValue().get(0).getSegment()==-1){
-                trajectories.add(Tuple2.apply(HilbertUtil.trajectoryMinDist(e.getValue().get(0).getMinLongitude(),e.getValue().get(0).getMinLatitude(),e.getValue().get(0).getMaxLongitude(),e.getValue().get(0).getMaxLatitude(),trajectoryQuery),e.getValue().get(0).getObjectId()));
-//                flushedtrajectories.add(e.getValue().get(0).getObjectId());
+            if(e.getValue().get(0).getTrajectorySegment().getSegment()==-1){
+                flushedtrajectories.add(e.getValue().get(0).getTrajectorySegment().getObjectId());
                 return true;
-            }else if(e.getValue().get(0).getSegment()==1 && e.getValue().get(e.getValue().size()-1).getSegment()<1){
+            }else if(e.getValue().get(0).getTrajectorySegment().getSegment()==1 && e.getValue().get(e.getValue().size()-1).getTrajectorySegment().getSegment()<1){
                 for (int i = 0; i < e.getValue().size()-1; i++) {
-                    if(e.getValue().get(i).getSegment()+1!=Math.abs(e.getValue().get(i+1).getSegment())){
+                    if(e.getValue().get(i).getTrajectorySegment().getSegment()+1!=Math.abs(e.getValue().get(i+1).getTrajectorySegment().getSegment())){
                         return false;
                     }
                 }
-
-                double maxDist = -1;
-                for (int i = 0; i <= e.getValue().size()-1; i++) {
-                    maxDist = Math.max(maxDist,HilbertUtil.trajectoryMinDist(e.getValue().get(i).getMinLongitude(),e.getValue().get(i).getMinLatitude(),e.getValue().get(i).getMaxLongitude(),e.getValue().get(i).getMaxLatitude(),trajectoryQuery));
-                }
-                trajectories.add(Tuple2.apply(maxDist,e.getValue().get(0).getObjectId()));
-                return true;
-            }
-            return false;
-        });
-
-        System.out.println(trajectories.size());
-        System.out.println(k);
-        trajectories.sort(Comparator.comparingDouble(t -> t._1));
-        for (int i = 0; i < k; i++) {
-            flushedtrajectories.add(trajectories.get(i)._2);
-        }
-    }
-
-
-    private static void flush(HashMap<String, List<TrajectorySegment>> identifiedTrajectories, HashSet<String> flushedtrajectories){
-        identifiedTrajectories.entrySet().removeIf(e->{
-            if(e.getValue().get(0).getSegment()==-1){
-                flushedtrajectories.add(e.getValue().get(0).getObjectId());
-                return true;
-            }else if(e.getValue().get(0).getSegment()==1 && e.getValue().get(e.getValue().size()-1).getSegment()<1){
-                for (int i = 0; i < e.getValue().size()-1; i++) {
-                    if(e.getValue().get(i).getSegment()+1!=Math.abs(e.getValue().get(i+1).getSegment())){
-                        return false;
-                    }
-                }
-                flushedtrajectories.add(e.getValue().get(0).getObjectId());
+                flushedtrajectories.add(e.getValue().get(0).getTrajectorySegment().getObjectId());
                 return true;
             }
             return false;

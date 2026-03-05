@@ -7,8 +7,9 @@ package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 import org.apache.parquet.io.api.*;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
-public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<TrajectorySegment> {
+public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<TrajectorySegmentWithMetadata> {
 
     private String objectId;
     private long segment;
@@ -19,6 +20,9 @@ public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<Tra
     private double maxLongitude;
     private double maxLatitude;
     private long maxTimestamp;
+
+    private byte[] pivotsLongitude;
+    private byte[] pivotsLatitude;
 
     GroupConverter groupConverter = new GroupConverter() {
         @Override
@@ -63,6 +67,10 @@ public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<Tra
                 return p9;
             } else if(i==7){
                 return p10;
+            } else if(i==8){
+                return p11;
+            } else if(i==9){
+                return p12;
             }
             return null;
         }
@@ -209,9 +217,48 @@ public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<Tra
         }
     };
 
+    PrimitiveConverter p11 = new PrimitiveConverter() {
+        @Override
+        public boolean isPrimitive() {
+            return super.isPrimitive();
+        }
+
+        @Override
+        public void addBinary(Binary val) {
+            pivotsLongitude = val.getBytes();
+        }
+    };
+
+    PrimitiveConverter p12 = new PrimitiveConverter() {
+        @Override
+        public boolean isPrimitive() {
+            return super.isPrimitive();
+        }
+
+        @Override
+        public void addBinary(Binary val) {
+            pivotsLatitude = val.getBytes();
+        }
+    };
+
     @Override
-    public TrajectorySegment getCurrentRecord() {
-        return new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp);
+    public TrajectorySegmentWithMetadata getCurrentRecord() {
+
+        if(pivotsLongitude == null){
+            return TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp),null);
+        }
+
+        ByteBuffer pLongitude = ByteBuffer.wrap(pivotsLongitude);
+        ByteBuffer pLatitude = ByteBuffer.wrap(pivotsLatitude);
+
+        SpatialPoint[] spatialPoints = new SpatialPoint[pLongitude.array().length/8];
+        for (int i = 0; i < spatialPoints.length; i++) {
+            spatialPoints[i] = new SpatialPoint(pLongitude.getDouble(),pLatitude.getDouble());
+        }
+
+        pivotsLongitude = null;
+        pivotsLatitude = null;
+        return TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp),spatialPoints);
     }
 
     @Override

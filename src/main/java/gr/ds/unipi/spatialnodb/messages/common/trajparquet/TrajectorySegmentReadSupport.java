@@ -13,7 +13,22 @@ public class TrajectorySegmentReadSupport extends ReadSupport<TrajectorySegment>
 
     @Override
     public ReadContext init(InitContext context){
-        return new ReadContext(context.getFileSchema());
+
+        MessageType schema = MessageTypeParser.parseMessageType( "message TrajectorySegment {\n" +
+                "required BINARY objectId;\n" +
+                "required INT64 segment;\n" +
+                "required BINARY longitude;\n" +
+                "required BINARY latitude;\n" +
+                "required BINARY timestamps;\n" +
+                "required DOUBLE minLongitude;\n" +
+                "required DOUBLE minLatitude;\n" +
+                "required INT64 minTimestamp;\n" +
+                "required DOUBLE maxLongitude;\n" +
+                "required DOUBLE maxLatitude;\n" +
+                "required INT64 maxTimestamp;\n" +
+                "}");
+
+        return new ReadContext(schema/*context.getFileSchema()*/);
     }
 
     @Override

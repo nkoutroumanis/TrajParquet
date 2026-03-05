@@ -6,10 +6,7 @@ import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigValueFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.hadoop.MultipleParquetOutputsFormat;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.Bounds;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWriteSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
@@ -62,7 +59,6 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         Job job = Job.getInstance();
 
         ParquetOutputFormat.setCompression(job, CompressionCodecName.SNAPPY);
-
         ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWriteSupport.class);
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
@@ -148,12 +144,13 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         final double maxLat = bounds.getMaxLatitude()+0.0000001;
         final long maxTime = bounds.getMaxTimestamp()+1000;
 
+        ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWithMetadataWriteSupport.class);
         JavaPairRDD segmentedTrajectoriesRDD = trajectoriesRDD.flatMapToPair(f-> {
             
             String objectId = f.getObjectId();
             SpatioTemporalPoint[] spts = f.getSpatioTemporalPoints();
             
-            List<Tuple2<Long, TrajectorySegment>> trajectoryParts = new ArrayList<>();
+            List<Tuple2<Long, TrajectorySegmentWithMetadata>> trajectoryParts = new ArrayList<>();
             List<SpatioTemporalPoint> currentPart = new ArrayList<>();
 
             //initialize for the currentHilValue
@@ -247,7 +244,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                     double maxLatitude = -Double.MAX_VALUE;
                     long maxTimestamp = Long.MIN_VALUE;
 
-                    for (int j=0; j < currentPart.size()-1; j++) {
+                    for (int j=0; j < currentPart.size(); j++) {
                         if (Double.compare(minLongitude, currentPart.get(j).getLongitude()) == 1) {
                             minLongitude = currentPart.get(j).getLongitude();
                         }
@@ -268,7 +265,30 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                         }
                     }
 
-                    trajectoryParts.add(Tuple2.apply(currentHilValue, new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
+                    SpatialPoint medoid = findMedoid(currentPart, (minLongitude + maxLongitude)/2, (minLatitude + maxLatitude)/2);
+                    SpatialPoint fartherFromMedoid = findFartherFrom(currentPart, medoid);
+                    SpatialPoint farther = findFartherFrom(currentPart,fartherFromMedoid);
+                    List<SpatialPoint> pivots = new ArrayList<>(3);
+
+                    pivots.add(medoid);
+                    if(!pivots.contains(fartherFromMedoid)){
+                        pivots.add(fartherFromMedoid);
+                    }
+                    if(!pivots.contains(farther)){
+                        pivots.add(farther);
+                    }
+
+                    if(part==1){
+                        SpatialPoint firstPoint = new SpatialPoint(currentPart.get(0).getLongitude(), currentPart.get(0).getLatitude());
+                        if(!pivots.contains(firstPoint)){
+                            pivots.add(firstPoint);
+                        }else{
+                            pivots.remove(firstPoint);
+                            pivots.add(firstPoint);
+                        }
+                    }
+
+                    trajectoryParts.add(Tuple2.apply(currentHilValue, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata( new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp), pivots.toArray(new SpatialPoint[0]))));
                     currentPart.clear();
 
                     Comparator<Tuple2<Long, SpatioTemporalPoint[]>> comparator = Comparator.comparingLong(d-> d._2[0].getTimestamp());
@@ -288,7 +308,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                     passingSegments.sort(comparator);
 
                     for (Tuple2<Long, SpatioTemporalPoint[]> passingSegment : passingSegments) {
-                        trajectoryParts.add(Tuple2.apply(passingSegment._1, new TrajectorySegment(objectId, part++, passingSegment._2, Math.min(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.min(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[0].getTimestamp(), Math.max(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.max(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[1].getTimestamp())));
+                        trajectoryParts.add(Tuple2.apply(passingSegment._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, passingSegment._2, Math.min(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.min(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[0].getTimestamp(), Math.max(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.max(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[1].getTimestamp()), null)));
                     }
 
 //                    if(passingSegments.size()>0) {
@@ -357,39 +377,80 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                 if(currentPart.size()==1){
                     throw new Exception("There is a trajectory segment containing one point");
                 }
-                trajectoryParts.add(Tuple2.apply(currentHilValue,new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp)));
+
+
+                SpatialPoint medoid = findMedoid(currentPart, (minLongitude + maxLongitude)/2, (minLatitude + maxLatitude)/2);
+                SpatialPoint fartherFromMedoid = findFartherFrom(currentPart, medoid);
+                SpatialPoint farther = findFartherFrom(currentPart,fartherFromMedoid);
+                List<SpatialPoint> pivots = new ArrayList<>(3);
+
+                pivots.add(medoid);
+                if(!pivots.contains(fartherFromMedoid)){
+                    pivots.add(fartherFromMedoid);
+                }
+                if(!pivots.contains(farther)){
+                    pivots.add(farther);
+                }
+                if(part==1){
+                    SpatialPoint firstPoint = new SpatialPoint(currentPart.get(0).getLongitude(), currentPart.get(0).getLatitude());
+                    if(!pivots.contains(firstPoint)){
+                        pivots.add(firstPoint);
+                    }else{
+                        pivots.remove(firstPoint);
+                        pivots.add(firstPoint);
+                    }
+                }
+
+                trajectoryParts.add(Tuple2.apply(currentHilValue,TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp), pivots.toArray(new SpatialPoint[0]))));
 
                 currentPart.clear();
             }
 
-            trajectoryParts.sort(Comparator.comparingLong(d-> d._2.getSpatioTemporalPoints()[0].getTimestamp()));
+            trajectoryParts.sort(Comparator.comparingLong(d-> d._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getTimestamp()));
             for (int i = 0; i < trajectoryParts.size()-1; i++) {
-                if(trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getTimestamp() != trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getTimestamp() ||
-                        trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getLongitude() != trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getLongitude() ||
-                        trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getLatitude() != trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getLatitude())
+                if(trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length-1].getTimestamp() != trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getTimestamp() ||
+                        trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLongitude() != trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getLongitude() ||
+                        trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLatitude() != trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getLatitude())
                 {
-                    System.out.println(trajectoryParts.get(i)._2.getSegment()+" - "+trajectoryParts.get(i)._2.getSpatioTemporalPoints().length+" "+trajectoryParts.get(i+1)._2.getSpatioTemporalPoints().length+" "+trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getTimestamp() +" "+ trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getTimestamp() +" "+
-                            trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getLongitude() +" "+ trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getLongitude() +" "+
-                            trajectoryParts.get(i)._2.getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getSpatioTemporalPoints().length-1].getLatitude() +" "+ trajectoryParts.get(i+1)._2.getSpatioTemporalPoints()[0].getLatitude());
+                    System.out.println(trajectoryParts.get(i)._2.getTrajectorySegment().getSegment()+" - "+trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length+" "+trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints().length+" "+trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length-1].getTimestamp() +" "+ trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getTimestamp() +" "+
+                            trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLongitude() +" "+ trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getLongitude() +" "+
+                            trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints()[trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLatitude() +" "+ trajectoryParts.get(i+1)._2.getTrajectorySegment().getSpatioTemporalPoints()[0].getLatitude());
                     throw new Exception("Problem concerning the linking of the points in the trajectory segments. Object id: "+objectId+" Total trajectory segments "+trajectoryParts.size());
                 }
             }
 
             for (int i = 0; i < trajectoryParts.size()-1; i++) {
-                if(trajectoryParts.get(i)._2.getSegment() + 1 != trajectoryParts.get(i+1)._2.getSegment()){
+                if(trajectoryParts.get(i)._2.getTrajectorySegment().getSegment() + 1 != trajectoryParts.get(i+1)._2.getTrajectorySegment().getSegment()){
                     throw new Exception("Problem concerning the numbering of trajectory segments.");
                 }
             }
 
-            Tuple2<Long,TrajectorySegment> trjSeg = trajectoryParts.get(trajectoryParts.size()-1);
-            Tuple2<Long,TrajectorySegment> newTrjSeg = new Tuple2<>(trjSeg._1, new TrajectorySegment(trjSeg._2.getObjectId(), -1* trjSeg._2.getSegment(), trjSeg._2.getSpatioTemporalPoints(), trjSeg._2.getMinLongitude(), trjSeg._2.getMinLatitude(), trjSeg._2.getMinTimestamp(), trjSeg._2.getMaxLongitude(), trjSeg._2.getMaxLatitude(), trjSeg._2.getMaxTimestamp()));
+            Tuple2<Long,TrajectorySegmentWithMetadata> trjSeg = trajectoryParts.get(trajectoryParts.size()-1);
+            List<SpatialPoint> pivots = new ArrayList<>(Arrays.asList(trjSeg._2().getPivots()));
+            SpatioTemporalPoint lp = trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints()[trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints().length-1];
+            SpatialPoint lastPoint = new SpatialPoint(lp.getLongitude(), lp.getLatitude());
+            if(!pivots.contains(lastPoint)){
+                pivots.add(lastPoint);
+            }else{
+                if(!pivots.get(pivots.size()-1).equals(lastPoint)){
+                    pivots.remove(lastPoint);
+                }
+                pivots.add(lastPoint);
+            }
+            Tuple2<Long,TrajectorySegmentWithMetadata> newTrjSeg = new Tuple2<>(trjSeg._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(trjSeg._2.getTrajectorySegment().getObjectId(), -1* trjSeg._2.getTrajectorySegment().getSegment(), trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints(), trjSeg._2.getTrajectorySegment().getMinLongitude(), trjSeg._2.getTrajectorySegment().getMinLatitude(), trjSeg._2.getTrajectorySegment().getMinTimestamp(), trjSeg._2.getTrajectorySegment().getMaxLongitude(), trjSeg._2.getTrajectorySegment().getMaxLatitude(), trjSeg._2.getTrajectorySegment().getMaxTimestamp()), pivots.toArray(new SpatialPoint[0])));
             trajectoryParts.set(trajectoryParts.size()-1, newTrjSeg);
+
+//            trajectoryParts.forEach(ll->{
+//                if(ll._2.getTrajectorySegment().getObjectId().equals("256208000") && ll._2.getTrajectorySegment().getSegment()==21){
+//                    System.out.println("EXIT "+ ll._1);
+//                    System.exit(1);
+//                }
+//            });
 
             return trajectoryParts.iterator();
 
-        })
-                .repartitionAndSortWithinPartitions(new HashPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1+"/", null), f._2));
-        segmentedTrajectoriesRDD.saveAsNewAPIHadoopFile(writePath+File.separator+"stIndex", Void.class, TrajectorySegment.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
+        }).repartitionAndSortWithinPartitions(new HashPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1+"/", null), f._2));
+        segmentedTrajectoriesRDD.saveAsNewAPIHadoopFile(writePath+File.separator+"stIndex", Void.class, TrajectorySegmentWithMetadata.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
@@ -418,4 +479,29 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
 
     }
 
+    private static SpatialPoint findMedoid(List<SpatioTemporalPoint> spatioTemporalPoints, double centroidLon,double centroidLat){
+        double minDist = Double.MAX_VALUE;
+        SpatioTemporalPoint medoid = null;
+        for (int i = 0; i < spatioTemporalPoints.size(); i++) {
+            double distance = HilbertUtil.euclideanDistance(spatioTemporalPoints.get(i).getLongitude(),spatioTemporalPoints.get(i).getLatitude(),centroidLon,centroidLat);
+            if (Double.compare(distance,minDist)==-1) {
+                medoid = spatioTemporalPoints.get(i);
+                minDist = distance;
+            }
+        }
+        return new SpatialPoint(medoid.getLongitude(), medoid.getLatitude());
+    }
+
+    private static SpatialPoint findFartherFrom(List<SpatioTemporalPoint> spatioTemporalPoints, SpatialPoint spatialPoint){
+        double maxDist = -Double.MAX_VALUE;
+        SpatioTemporalPoint fartherFrom = null;
+        for (int i = 0; i < spatioTemporalPoints.size(); i++) {
+            double distance = HilbertUtil.euclideanDistance(spatioTemporalPoints.get(i).getLongitude(),spatioTemporalPoints.get(i).getLatitude(),spatialPoint.getLongitude(),spatialPoint.getLatitude());
+            if (Double.compare(distance,maxDist)==1) {
+                fartherFrom = spatioTemporalPoints.get(i);
+                maxDist = distance;
+            }
+        }
+        return new SpatialPoint(fartherFrom.getLongitude(), fartherFrom.getLatitude());
+    }
 }

@@ -354,6 +354,16 @@ public class HilbertUtil {
         return true;
     }
 
+    //points distance to cube
+    public static boolean isPointMinDistGreaterThan(double x, double y, SpatioTemporalPoint[] spatioTemporalPoints, double epsilon) {
+        double minDist = Double.MAX_VALUE;
+        for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
+            minDist = Double.min(minDist, HilbertUtil.euclideanDistance(x,y,spatioTemporalPoint.getLongitude(), spatioTemporalPoint.getLatitude()));
+            if(Double.compare(minDist, epsilon) != 1){return false;}
+        }
+        return true;
+    }
+
     public static double trajectoryMinDist(double xMin, double yMin, double xMax, double yMax, SpatioTemporalPoint[] spatioTemporalPoints) {
         double minDist = Double.MAX_VALUE;
         for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
