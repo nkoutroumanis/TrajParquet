@@ -2,7 +2,6 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
@@ -24,10 +23,10 @@ import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
-public class QueriesDirectoriesFrechetIndex {
+public class QueriesDirectoriesFrechet {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("queries-frechet.conf");
+        Config config = loadConfig(args[0]/*"queries-frechet.conf"*/);
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -53,10 +52,14 @@ public class QueriesDirectoriesFrechetIndex {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Similarity Querying in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
-        File[] directories = new File(parquetPath).listFiles(File::isDirectory);
+        File[] directories = new File(parquetPath+File.separator+"stIndex").listFiles(File::isDirectory);
         Set<String> directoriesSet = new HashSet<>();
         for (File directory : directories) {
             directoriesSet.add(directory.getName());
@@ -152,9 +155,9 @@ public class QueriesDirectoriesFrechetIndex {
                         long[] arr = hilbertCurve.point(r);
                         if (arr[0] == hilStart[0] || arr[1] == hilStart[1] || arr[2] == hilStart[2]
                                 || arr[0] == hilEnd[0] || arr[1] == hilEnd[1] || arr[2] == hilEnd[2]) {
-                            sbIntersected.append(parquetPath+"/"+r+",");
+                            sbIntersected.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
                         }else{
-                            sbFullyCovers.append(parquetPath+"/"+r+",");
+                            sbFullyCovers.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
                         }
                     }
                 }
@@ -173,13 +176,9 @@ public class QueriesDirectoriesFrechetIndex {
             }
             sbIntersected.deleteCharAt(sbIntersected.length()-1);
 
-//            System.out.println("directoriesSet size"+directoriesSet.size());
-//            System.out.println("sb.string "+sb.toString());
-
             long startTime = System.currentTimeMillis();
 
-            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString()/*parquetPath*/, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
-//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
+            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
 
             JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD
                     .filter(f -> {
@@ -262,7 +261,7 @@ public class QueriesDirectoriesFrechetIndex {
             for (Tuple2<Void, TrajectorySegment> voidTrajectoryTuple2 : trajs) {
                 numOfPoints = numOfPoints + voidTrajectoryTuple2._2.getSpatioTemporalPoints().length;
             }
-            System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
+//            System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
 

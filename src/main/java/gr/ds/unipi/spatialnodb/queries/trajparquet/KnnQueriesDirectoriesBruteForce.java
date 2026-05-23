@@ -27,7 +27,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class KnnQueriesDirectoriesBruteForce {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("knnQuery.conf");
+        Config config = loadConfig(args[0]/*"knnQuery.conf"*/);
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -53,7 +53,11 @@ public class KnnQueriesDirectoriesBruteForce {
 
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
-        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class}).setMaster("local[*]").set("spark.executor.memory","1g").set("spark.kryoserializer.buffer.max","2047m");
+        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});
+        sparkConf.setAppName("Knn Querying (Brute force) in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 

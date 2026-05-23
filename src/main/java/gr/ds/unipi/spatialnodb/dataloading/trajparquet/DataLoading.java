@@ -3,6 +3,7 @@ package gr.ds.unipi.spatialnodb.dataloading.trajparquet;
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.Bounds;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWriteSupport;
@@ -47,12 +48,12 @@ public class DataLoading {
         Config hilbert = dataLoading.getConfig("hilbert");
 
         final int bits = hilbert.getInt("bits");
-        final double minLon = hilbert.getDouble("minLon");
-        final double minLat = hilbert.getDouble("minLat");
-        final long minTime = hilbert.getLong("minTime");
-        final double maxLon = hilbert.getDouble("maxLon");
-        final double maxLat = hilbert.getDouble("maxLat");
-        final long maxTime = hilbert.getLong("maxTime");
+//        final double minLon = hilbert.getDouble("minLon");
+//        final double minLat = hilbert.getDouble("minLat");
+//        final long minTime = hilbert.getLong("minTime");
+//        final double maxLon = hilbert.getDouble("maxLon");
+//        final double maxLat = hilbert.getDouble("maxLat");
+//        final long maxTime = hilbert.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
@@ -64,14 +65,18 @@ public class DataLoading {
         ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWriteSupport.class);
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
-        SparkConf sparkConf = new SparkConf()/*.setMaster("local[1]").set("spark.executor.memory","1g")*/.registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+        sparkConf.setAppName("Trajectory Loading in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
         Broadcast smallHilbertCurveBr = jsc.broadcast(hilbertCurve);
         long startTime = System.currentTimeMillis();
 
-        JavaPairRDD rdd = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex])
+        JavaPairRDD<String, List<Tuple3<Double, Double, Long>>> rdd1 = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex])
 //                .flatMapToPair(f-> {
 //            List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
 //            for (String[] strings : f._2) {
@@ -234,17 +239,37 @@ public class DataLoading {
 //            return trajectoryParts.iterator();
 //
 //        })
-                .flatMapToPair(f-> {
+                .mapToPair(f-> {
                     List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
                     for (String[] strings : f._2) {
                         long timestamp = -1;
                         try {
                             timestamp = sdf.parse(strings[timeIndex]).getTime();
-                        }catch (Exception e){
+                        } catch (Exception e) {
                             continue;
                         }
                         tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
                     }
+
+                    return Tuple2.apply(f._1,tuple);
+                }).cache();
+
+        Bounds bounds = rdd1.aggregate(
+                new Bounds(),
+                (acc, l) -> {acc.add(l._2);return acc;},
+                (a, b) -> { a.merge(b); return a; }
+        );
+
+        final double minLon = bounds.getMinLongitude();
+        final double minLat = bounds.getMinLatitude();
+        final long minTime = bounds.getMinTimestamp();
+        final double maxLon = bounds.getMaxLongitude()+0.0000001;
+        final double maxLat = bounds.getMaxLatitude()+0.0000001;
+        final long maxTime = bounds.getMaxTimestamp()+1000;
+
+        JavaPairRDD rdd = rdd1.flatMapToPair(f-> {
+                    List<Tuple3<Double, Double, Long>> tuple = f._2;
+
                     Comparator<Tuple3<Double, Double, Long>> comp = Comparator.comparingLong(d-> d._3());
                     comp = comp.thenComparingDouble(d-> d._1());
                     comp = comp.thenComparingDouble(d-> d._2());

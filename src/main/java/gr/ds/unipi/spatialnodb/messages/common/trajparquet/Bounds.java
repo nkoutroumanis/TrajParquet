@@ -1,14 +1,73 @@
 package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 
 import java.io.Serializable;
+import java.util.List;
+
+import scala.Tuple3;
 
 public class Bounds implements Serializable {
+    public void setMinLon(double minLon) {
+        this.minLon = minLon;
+    }
+
+    public void setMinLat(double minLat) {
+        this.minLat = minLat;
+    }
+
+    public void setMinTimestamp(long minTs) {
+        this.minTs = minTs;
+    }
+
+    public void setMaxLon(double maxLon) {
+        this.maxLon = maxLon;
+    }
+
+    public void setMaxLat(double maxLat) {
+        this.maxLat = maxLat;
+    }
+
+    public void setMaxTimestamp(long maxTs) {
+        this.maxTs = maxTs;
+    }
+
     private double minLon = Double.MAX_VALUE;
     private double minLat = Double.MAX_VALUE;
     private long   minTs  = Long.MAX_VALUE;
     private double maxLon = -Double.MAX_VALUE;
     private double maxLat = -Double.MAX_VALUE;
     private long   maxTs  = Long.MIN_VALUE;
+
+    public void add(List<Tuple3<Double, Double, Long>> stPoints) {
+
+        double minLongitude = Double.MAX_VALUE;
+        double minLatitude = Double.MAX_VALUE;
+        long minTimestamp = Long.MAX_VALUE;
+
+        double maxLongitude = -Double.MAX_VALUE;
+        double maxLatitude = -Double.MAX_VALUE;
+        long maxTimestamp = Long.MIN_VALUE;
+
+        for (Tuple3<Double, Double, Long> stP : stPoints) {
+            if (Double.compare(minLongitude, stP._1()) == 1) {
+                minLongitude = stP._1();
+            }
+            if (Double.compare(minLatitude, stP._2()) == 1) {
+                minLatitude = stP._2();
+            }
+            if (Long.compare(minTimestamp, stP._3()) == 1) {
+                minTimestamp =  stP._3();
+            }
+            if (Double.compare(maxLongitude, stP._1()) == -1) {
+                maxLongitude = stP._1();
+            }
+            if (Double.compare(maxLatitude, stP._2()) == -1) {
+                maxLatitude = stP._2();
+            }
+            if (Long.compare(maxTimestamp,  stP._3()) == -1) {
+                maxTimestamp =  stP._3();
+            }
+        }
+    }
 
     public void add(TrajectorySegment ts) {
         minLon = Math.min(minLon, ts.getMinLongitude());
@@ -46,6 +105,5 @@ public class Bounds implements Serializable {
     public long getMaxTimestamp() {
         return maxTs;
     }
-
 
 }

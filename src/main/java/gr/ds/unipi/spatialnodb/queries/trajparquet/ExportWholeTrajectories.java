@@ -20,7 +20,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
 public class ExportWholeTrajectories {
     public static void main(String[] args) {
-        Config config = loadConfig("export-trajectories.conf");
+        Config config = loadConfig(args[0]/*"export-trajectories.conf"*/);
 
         Config dataLoading = config.getConfig("export-trajectories");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -35,6 +35,10 @@ public class ExportWholeTrajectories {
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
         SparkConf sparkConf = new SparkConf()/*.setMaster("local[*]").set("spark.executor.memory","1g")*/.registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+        sparkConf.setAppName("Export whole Trajectories from TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 

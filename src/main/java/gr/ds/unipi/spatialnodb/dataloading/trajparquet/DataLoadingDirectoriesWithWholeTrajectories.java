@@ -37,7 +37,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class DataLoadingDirectoriesWithWholeTrajectories {
     public static void main(String[] args) throws IOException {
 
-        Config config = loadConfig("data-loading.conf");
+        Config config = loadConfig(args[0]);
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -62,7 +62,13 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWriteSupport.class);
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
-        SparkConf sparkConf = new SparkConf().setMaster("local[*]").set("spark.executor.memory","4g").registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
+
+        sparkConf.setAppName("Trajectory Loading in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
+
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 

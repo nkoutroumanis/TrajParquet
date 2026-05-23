@@ -14,7 +14,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
-import org.davidmoten.hilbert.Range;
 import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
@@ -25,10 +24,10 @@ import java.util.*;
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.*;
 
-public class QueriesDirectoriesFrechetCubes {
+public class QueriesDirectoriesFrechetOptimized {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("queries-frechet.conf");
+        Config config = loadConfig(/*"queries-frechet.conf"*/args[0]);
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -54,10 +53,14 @@ public class QueriesDirectoriesFrechetCubes {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Similarity Querying in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
-        File[] directories = new File(parquetPath).listFiles(File::isDirectory);
+        File[] directories = new File(parquetPath+File.separator+"stIndex").listFiles(File::isDirectory);
         Set<String> directoriesSet = new HashSet<>();
         for (File directory : directories) {
             directoriesSet.add(directory.getName());
@@ -135,69 +138,6 @@ public class QueriesDirectoriesFrechetCubes {
             final double queryMaxLatitude = Double.min(maxLat-0.0000001,mbrMaxLatitude+epsilon);
             final long queryMaxTimestamp = minTime;//maxTime-1000;
 
-//            final HashSet<Long> initialCubes = new HashSet<>();
-//            StringBuilder sbFullyCovers = new StringBuilder();
-//            StringBuilder sbIntersected = new StringBuilder();
-//
-//            for (int i = 0; i < trajectoryQuery.length-1; i++) {
-//                long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(trajectoryQuery[i].getLongitude(), minLon, maxLon,trajectoryQuery[i].getLatitude(), minLat, maxLat, minTime, minTime, maxTime, maxOrdinates);
-//                long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(trajectoryQuery[i+1].getLongitude(), minLon, maxLon,trajectoryQuery[i+1].getLatitude(), minLat, maxLat, minTime, minTime, maxTime, maxOrdinates);
-//                Ranges ranges = hilbertCurve.query(hilStart, hilEnd, 0);
-//
-//                for (Range range : ranges.toList()) {
-//                    for (long cubeIndex = range.low(); cubeIndex <= range.high(); cubeIndex++) {
-//                        long[] cube =  hilbertCurve.point(cubeIndex);
-//
-//                        double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
-//                        double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
-//                        long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
-//
-//                        double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
-//                        double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
-//                        long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
-//
-//                        if(HilbertUtil.doesLineIntersectWithCube(trajectoryQuery[i].getLongitude(), trajectoryQuery[i].getLatitude(), minTime, trajectoryQuery[i+1].getLongitude(), trajectoryQuery[i+1].getLatitude(), minTime,
-//                                xMin,yMin,tMin,xMax,yMax,tMax)){
-//                            initialCubes.add(cubeIndex);
-//                        }
-//                    }
-//                }
-//            }
-//
-//            long xHop = (long) Math.ceil(epsilon/((maxLon-minLon)/(maxOrdinates+ 1L)));
-//            long yHop = (long) Math.ceil(epsilon/((maxLat-minLat)/(maxOrdinates+ 1L)));
-//            for (Long initialCubeIndex : initialCubes) {
-//                long[] cube =  hilbertCurve.point(initialCubeIndex);
-//                long startX = Math.max(cube[0]-xHop,0);
-//                long startY = Math.max(cube[1]-yHop,0);
-//
-//                long stopX = Math.min(cube[0]-xHop,(long) (maxLon-minLon)/(maxOrdinates+ 1L));
-//                long stopY = Math.min(cube[1]-yHop,(long) ((maxLat-minLat)/(maxOrdinates+ 1L)));
-//
-//                String c;
-//                for(long i=startX; i<=stopX; i++){
-//                    for(long j=startY; j<=stopY; j++){
-//                            if(i==startX || j==startY || i==stopX || j==stopY ){
-//                                for(long k=0; k<=maxOrdinates; k++){
-//                                    c = String.valueOf(hilbertCurve.index(i,j,k));
-//                                    if(directoriesSet.contains(c)){
-//                                        sbFullyCovers.append(parquetPath+"/"+k+",");
-//                                    }
-//                                }
-//                            }
-//                            else{
-//                                for(long k=0; k<=maxOrdinates; k++){
-//                                    c = String.valueOf(hilbertCurve.index(i,j,k));
-//                                    if(directoriesSet.contains(c)){
-//                                        sbFullyCovers.append(parquetPath+"/"+k+",");
-//                                    }
-//                                }
-//                            }
-//                    }
-//                }
-//            }
-
-//---
             long t1 = System.currentTimeMillis();
 
             long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
@@ -239,7 +179,7 @@ public class QueriesDirectoriesFrechetCubes {
                 for (long i = 0; i <= maxOrdinates; i++) {
                     String j = String.valueOf(hilbertCurve.index(cube[0], cube[1], i));
                     if(directoriesSet.contains(j)) {
-                        cubes.append(parquetPath+"/"+j+",");
+                        cubes.append(parquetPath+File.separator+"stIndex"+File.separator+j+",");
                     }
                 }
             }
@@ -344,7 +284,7 @@ public class QueriesDirectoriesFrechetCubes {
 //                    }
 //                }
             }
-            System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
+//            System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
 

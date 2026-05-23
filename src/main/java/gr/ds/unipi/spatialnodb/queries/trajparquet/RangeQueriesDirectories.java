@@ -10,7 +10,6 @@ import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentRead
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
-import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -53,10 +52,14 @@ public class RangeQueriesDirectories {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Range Querying in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
-        File[] directories = new File(parquetPath).listFiles(File::isDirectory);
+        File[] directories = new File(parquetPath+ File.separator+"stIndex").listFiles(File::isDirectory);
         Set<String> directoriesSet = new HashSet<>();
         for (File directory : directories) {
             directoriesSet.add(directory.getName());

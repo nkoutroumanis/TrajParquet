@@ -50,10 +50,14 @@ public class RangeQueriesDirectoriesImprovedActualPoints {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Range Querying in TrajParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
-        File[] directories = new File(parquetPath).listFiles(File::isDirectory);
+        File[] directories = new File(parquetPath+ File.separator+"stIndex").listFiles(File::isDirectory);
         Set<String> directoriesSet = new HashSet<>();
         for (File directory : directories) {
             directoriesSet.add(directory.getName());
@@ -92,9 +96,9 @@ public class RangeQueriesDirectoriesImprovedActualPoints {
                         long[] arr = hilbertCurve.point(r);
                         if (arr[0] == hilStart[0] || arr[1] == hilStart[1] || arr[2] == hilStart[2]
                                 || arr[0] == hilEnd[0] || arr[1] == hilEnd[1] || arr[2] == hilEnd[2]) {
-                            sbIntersected.append(parquetPath+"/"+r+",");
+                            sbIntersected.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
                         }else{
-                            sbFullyCovers.append(parquetPath+"/"+r+",");
+                            sbFullyCovers.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
                         }
                     }
                 }

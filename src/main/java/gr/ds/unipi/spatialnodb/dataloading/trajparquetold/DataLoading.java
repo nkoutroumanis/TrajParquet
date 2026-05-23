@@ -3,6 +3,7 @@ package gr.ds.unipi.spatialnodb.dataloading.trajparquetold;
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.Bounds;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegmentWriteSupport;
@@ -42,12 +43,12 @@ public class DataLoading {
         Config hilbert = dataLoading.getConfig("hilbert");
 
         final int bits = hilbert.getInt("bits");
-        final double minLon = hilbert.getDouble("minLon");
-        final double minLat = hilbert.getDouble("minLat");
-        final long minTime = hilbert.getLong("minTime");
-        final double maxLon = hilbert.getDouble("maxLon");
-        final double maxLat = hilbert.getDouble("maxLat");
-        final long maxTime = hilbert.getLong("maxTime");
+//        final double minLon = hilbert.getDouble("minLon");
+//        final double minLat = hilbert.getDouble("minLat");
+//        final long minTime = hilbert.getLong("minTime");
+//        final double maxLon = hilbert.getDouble("maxLon");
+//        final double maxLat = hilbert.getDouble("maxLat");
+//        final long maxTime = hilbert.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
@@ -66,17 +67,40 @@ public class DataLoading {
         Broadcast smallHilbertCurveBr = jsc.broadcast(hilbertCurve);
         long startTime = System.currentTimeMillis();
 
-        JavaPairRDD rdd = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex]).flatMapToPair(f-> {
-            List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
-            for (String[] strings : f._2) {
-                long timestamp = -1;
-                try {
-                    timestamp = sdf.parse(strings[timeIndex]).getTime();
-                }catch (Exception e){
-                    continue;
-                }
-                tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
-            }
+        JavaPairRDD<String, List<Tuple3<Double, Double, Long>>> rdd1 = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex])
+                .mapToPair(f-> {
+                    List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
+                    for (String[] strings : f._2) {
+                        long timestamp = -1;
+                        try {
+                            timestamp = sdf.parse(strings[timeIndex]).getTime();
+                        } catch (Exception e) {
+                            continue;
+                        }
+                        tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
+                    }
+
+                    return Tuple2.apply(f._1,tuple);
+                }).cache();
+
+        Bounds bounds = rdd1.aggregate(
+                new Bounds(),
+                (acc, l) -> {
+                    acc.add(l._2);return acc;},
+                (a, b) -> { a.merge(b); return a; }
+        );
+
+        final double minLon = bounds.getMinLongitude();
+        final double minLat = bounds.getMinLatitude();
+        final long minTime = bounds.getMinTimestamp();
+        final double maxLon = bounds.getMaxLongitude()+0.0000001;
+        final double maxLat = bounds.getMaxLatitude()+0.0000001;
+        final long maxTime = bounds.getMaxTimestamp()+1000;
+
+
+        JavaPairRDD rdd = rdd1.flatMapToPair(f->{
+
+            List<Tuple3<Double, Double, Long>> tuple = f._2;
 
             Comparator<Tuple3<Double, Double, Long>> comparator = Comparator.comparingLong(d-> d._3());
             comparator = comparator.thenComparingDouble(d-> d._1());
