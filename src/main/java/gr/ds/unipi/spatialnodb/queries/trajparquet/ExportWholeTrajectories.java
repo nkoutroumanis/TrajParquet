@@ -31,11 +31,12 @@ public class ExportWholeTrajectories {
         final int timeIndex = dataLoading.getInt("timeIndex");
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
+        final int n = dataLoading.getInt("numberOfTrajectories");
 
 
         SimpleDateFormat sdf =  new SimpleDateFormat(dateFormat);
         SparkConf sparkConf = new SparkConf()/*.setMaster("local[*]").set("spark.executor.memory","1g")*/.registerKryoClasses(new Class[]{SmallHilbertCurve.class, HilbertUtil.class});
-        sparkConf.setAppName("Export whole Trajectories from TrajParquet");
+        sparkConf.setAppName("Export whole Trajectories from raw files");
         if (!sparkConf.contains("spark.master")) {
             sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
         }
@@ -60,7 +61,7 @@ public class ExportWholeTrajectories {
             tuple.sort(comp);
 
             return tuple;
-        }).takeSample(false, 1000);
+        }).takeSample(false, n);
 
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(writePath))) {
