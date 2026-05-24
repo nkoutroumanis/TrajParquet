@@ -6,29 +6,29 @@ import java.util.List;
 import scala.Tuple3;
 
 public class Bounds implements Serializable {
-    public void setMinLon(double minLon) {
-        this.minLon = minLon;
-    }
-
-    public void setMinLat(double minLat) {
-        this.minLat = minLat;
-    }
-
-    public void setMinTimestamp(long minTs) {
-        this.minTs = minTs;
-    }
-
-    public void setMaxLon(double maxLon) {
-        this.maxLon = maxLon;
-    }
-
-    public void setMaxLat(double maxLat) {
-        this.maxLat = maxLat;
-    }
-
-    public void setMaxTimestamp(long maxTs) {
-        this.maxTs = maxTs;
-    }
+//    public void setMinLon(double minLon) {
+//        this.minLon = minLon;
+//    }
+//
+//    public void setMinLat(double minLat) {
+//        this.minLat = minLat;
+//    }
+//
+//    public void setMinTimestamp(long minTs) {
+//        this.minTs = minTs;
+//    }
+//
+//    public void setMaxLon(double maxLon) {
+//        this.maxLon = maxLon;
+//    }
+//
+//    public void setMaxLat(double maxLat) {
+//        this.maxLat = maxLat;
+//    }
+//
+//    public void setMaxTimestamp(long maxTs) {
+//        this.maxTs = maxTs;
+//    }
 
     private double minLon = Double.MAX_VALUE;
     private double minLat = Double.MAX_VALUE;
@@ -39,32 +39,32 @@ public class Bounds implements Serializable {
 
     public void add(List<Tuple3<Double, Double, Long>> stPoints) {
 
-        double minLongitude = Double.MAX_VALUE;
-        double minLatitude = Double.MAX_VALUE;
-        long minTimestamp = Long.MAX_VALUE;
-
-        double maxLongitude = -Double.MAX_VALUE;
-        double maxLatitude = -Double.MAX_VALUE;
-        long maxTimestamp = Long.MIN_VALUE;
+//        double minLongitude = Double.MAX_VALUE;
+//        double minLatitude = Double.MAX_VALUE;
+//        long minTimestamp = Long.MAX_VALUE;
+//
+//        double maxLongitude = -Double.MAX_VALUE;
+//        double maxLatitude = -Double.MAX_VALUE;
+//        long maxTimestamp = Long.MIN_VALUE;
 
         for (Tuple3<Double, Double, Long> stP : stPoints) {
-            if (Double.compare(minLongitude, stP._1()) == 1) {
-                minLongitude = stP._1();
+            if (Double.compare(minLon, stP._1()) == 1) {
+                minLon = stP._1();
             }
-            if (Double.compare(minLatitude, stP._2()) == 1) {
-                minLatitude = stP._2();
+            if (Double.compare(minLat, stP._2()) == 1) {
+                minLat = stP._2();
             }
-            if (Long.compare(minTimestamp, stP._3()) == 1) {
-                minTimestamp =  stP._3();
+            if (Long.compare(minTs, stP._3()) == 1) {
+                minTs =  stP._3();
             }
-            if (Double.compare(maxLongitude, stP._1()) == -1) {
-                maxLongitude = stP._1();
+            if (Double.compare(maxLon, stP._1()) == -1) {
+                maxLon = stP._1();
             }
-            if (Double.compare(maxLatitude, stP._2()) == -1) {
-                maxLatitude = stP._2();
+            if (Double.compare(maxLat, stP._2()) == -1) {
+                maxLat = stP._2();
             }
-            if (Long.compare(maxTimestamp,  stP._3()) == -1) {
-                maxTimestamp =  stP._3();
+            if (Long.compare(maxTs,  stP._3()) == -1) {
+                maxTs =  stP._3();
             }
         }
     }

@@ -26,9 +26,11 @@ import scala.Tuple2;
 import scala.Tuple3;
 import scala.Tuple6;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -37,7 +39,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class DataLoadingDirectoriesWithWholeTrajectories {
     public static void main(String[] args) throws IOException {
 
-        Config config = loadConfig(args[0]);
+        Config config = loadConfig("src/main/resources/data-loading.conf");
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -48,6 +50,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         final int timeIndex = dataLoading.getInt("timeIndex");
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
+        final String metricsPathExport = dataLoading.getString("metricsPathExport");
 
         Config hilbert = dataLoading.getConfig("hilbert");
 
@@ -483,6 +486,11 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
             e.printStackTrace();
         }
 
+        try(BufferedWriter bf = new BufferedWriter(new FileWriter(metricsPathExport+File.separator+"data-loading-trajparquetDirectoriesWithWholeTrajectories-"+Paths.get(writePath).getFileName().toString()+".txt"))) {
+            bf.write("Write Time");
+            bf.newLine();
+            bf.write(String.valueOf((endTime - startTime)/1000));
+        }
     }
 
     private static SpatialPoint findMedoid(List<SpatioTemporalPoint> spatioTemporalPoints, double centroidLon,double centroidLat){

@@ -21,14 +21,20 @@ import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 import scala.Tuple3;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
+
+import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
 public class DataLoading {
     public static void main(String[] args) throws IOException {
 
-        Config config = AppConfig.newAppConfig(args[0]/*"src/main/resources/app-new.conf"*/).getConfig();
+        Config config = loadConfig("src/main/resources/data-loading.conf");
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -39,6 +45,7 @@ public class DataLoading {
         final int timeIndex = dataLoading.getInt("timeIndex");
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
+        final String metricsPathExport = dataLoading.getString("metricsPathExport");
 
         Config hilbert = dataLoading.getConfig("hilbert");
 
@@ -216,6 +223,11 @@ public class DataLoading {
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
 
+        try(BufferedWriter bf = new BufferedWriter(new FileWriter(metricsPathExport+ File.separator+"data-loading-trajparquetold-"+ Paths.get(writePath).getFileName().toString()+".txt"))) {
+            bf.write("Write Time");
+            bf.newLine();
+            bf.write(String.valueOf((endTime - startTime)/1000));
+        }
     }
 
 }

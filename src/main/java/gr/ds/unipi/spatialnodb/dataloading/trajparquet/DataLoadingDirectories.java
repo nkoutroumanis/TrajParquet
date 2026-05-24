@@ -5,6 +5,7 @@ import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigValueFactory;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
@@ -31,6 +32,7 @@ import scala.Tuple2;
 import scala.Tuple3;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -42,7 +44,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class DataLoadingDirectories {
     public static void main(String[] args) throws IOException {
 
-        Config config = loadConfig(args[0]);
+        Config config = loadConfig("src/main/resources/data-loading.conf");
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -53,6 +55,7 @@ public class DataLoadingDirectories {
         final int timeIndex = dataLoading.getInt("timeIndex");
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
+        final String metricsPathExport = dataLoading.getString("metricsPathExport");
 
         Config hilbert = dataLoading.getConfig("hilbert");
 
@@ -99,7 +102,7 @@ public class DataLoadingDirectories {
                                 tuple.add(Tuple3.apply(Double.parseDouble(strings[longitudeIndex]), Double.parseDouble(strings[latitudeIndex]), timestamp));
                             }
 
-                            return Tuple2.apply(f._1,tuple);
+                            return Tuple2.apply(f._1, tuple);
                 }).cache();
 
         Bounds bounds = rdd1.aggregate(
@@ -115,7 +118,6 @@ public class DataLoadingDirectories {
         final double maxLon = bounds.getMaxLongitude()+0.0000001;
         final double maxLat = bounds.getMaxLatitude()+0.0000001;
         final long maxTime = bounds.getMaxTimestamp()+1000;
-
 
         JavaPairRDD rdd = rdd1.flatMapToPair(f->{
 
@@ -388,6 +390,12 @@ public class DataLoadingDirectories {
             fw.write(json);
         } catch (IOException e) {
             e.printStackTrace();
+        }
+
+        try(BufferedWriter bf = new BufferedWriter(new FileWriter(metricsPathExport+File.separator+"data-loading-trajparquetDirectories-"+ Paths.get(writePath).getFileName().toString()+".txt"))) {
+            bf.write("Write Time");
+            bf.newLine();
+            bf.write(String.valueOf((endTime - startTime)/1000));
         }
 
     }
