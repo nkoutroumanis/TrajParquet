@@ -17,19 +17,21 @@ import org.apache.spark.sql.SparkSession;
 import scala.Tuple2;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.util.*;
 
+import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 public class RangeQueriesActualPoints {
     public static void main(String args[]) throws IOException {
 
-        Config config = AppConfig.newAppConfig(args[0]/*"src/main/resources/app-new.conf"*/).getConfig();
+        Config config = loadConfig("src/main/resources/queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
-        final String queriesFileExport = dataLoading.getString("queriesFileExport");
+        final String metricsPath = dataLoading.getString("metricsPath");
 
         Job job = Job.getInstance();
 
@@ -40,8 +42,9 @@ public class RangeQueriesActualPoints {
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
         List<Long> times = new ArrayList<>();
+        List<Integer> pages = new ArrayList<>();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(queriesFileExport));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"range-queries-trajparquetoldActualPoints-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
@@ -147,17 +150,24 @@ public class RangeQueriesActualPoints {
 
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
+            pages.add(DataPage.counter);
 
             bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter);
             DataPage.counter = 0;
             bw.newLine();
         }
 
-        for (int ind = 0; ind < 10; ind++) {
-            times.remove(0);
-        }
-        bw.write(times.stream().mapToLong(Long::longValue).average().getAsDouble()+"");
         bw.close();
         br.close();
+
+        for (int ind = 0; ind < 10; ind++) {
+            times.remove(0);
+            pages.remove(0);
+        }
+        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-trajparquetoldActualPoints-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\n");
+        bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
+        bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
+        bw.close();
     }
 }

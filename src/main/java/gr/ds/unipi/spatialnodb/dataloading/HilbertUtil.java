@@ -153,13 +153,8 @@ public class HilbertUtil {
         STPoint stPoint1 =  new STPoint(nx0, ny0, nt0);
         STPoint stPoint2 =  new STPoint(nx1, ny1, nt1);
 
-//        if(!(new STPoint(lineX0, lineY0, lineT0).equals(stPoint1)) && !(lineT0 == stPoint1.getT())){
-            stPoints.add(stPoint1);
-//        }
-
-//        if(!(new STPoint(lineX1, lineY1, lineT1).equals(stPoint2)) && !(lineT1 == stPoint2.getT())){
-            stPoints.add(stPoint2);
-//        }
+        stPoints.add(stPoint1);
+        stPoints.add(stPoint2);
 
         if(stPoints.size()==0){
             try {
@@ -167,11 +162,69 @@ public class HilbertUtil {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-//            return Optional.empty();
         }
         return Optional.of(stPoints.toArray(new STPoint[stPoints.size()]));
 
     }
+
+    public static Optional<STPoint[]> liangBarskyTimeInterpolation(double lineX0, double lineY0, long lineT0, double lineX1, double lineY1, long lineT1,
+                                                  double xMin, double yMin, double xMax, double yMax){
+
+        double u1 = 0, u2 = 1;
+
+        double dx = lineX1 - lineX0, dy = lineY1 - lineY0;
+        long dt = lineT1 - lineT0;
+
+        double[] p = {-dx, dx, -dy, dy};
+        double[] q = {lineX0 - xMin, xMax - lineX0, lineY0 - yMin, yMax - lineY0};
+
+        for (int i = 0; i < 4; i++) {
+            if (p[i] == 0) {
+                if (q[i] < 0) {
+                    return Optional.empty();
+                }
+            } else {
+                double u = q[i] / p[i];
+                if (p[i] < 0) {
+                    u1 = Math.max(u, u1);
+                } else {
+                    u2 = Math.min(u, u2);
+                }
+            }
+        }
+
+        if (u1 > u2) {
+            return Optional.empty();
+        }
+        double nx0, ny0, nx1, ny1 ;
+        long nt0, nt1;
+        nx0 = (lineX0 + u1 * dx);
+        ny0 = (lineY0 + u1 * dy);
+
+        nx1 = (lineX0 + u2 * dx);
+        ny1 = (lineY0 + u2 * dy);
+
+        List<STPoint> stPoints = new ArrayList<>(2);
+        if(Double.compare(nx0,lineX0)==0 && Double.compare(ny0,lineY0)==0){
+            nt0 = lineT0;
+        }else{
+            nt0 = Math.round(lineT0 + u1 * dt);
+        }
+        STPoint stPoint1 =  new STPoint(nx0, ny0, nt0);
+
+        if(Double.compare(nx1,lineX1)==0 && Double.compare(ny1,lineY1)==0){
+            nt1 = lineT1;
+        }else{
+            nt1 = Math.round(lineT0 + u2 * dt);
+        }
+        STPoint stPoint2 =  new STPoint(nx1, ny1, nt1);
+
+        stPoints.add(stPoint1);
+        stPoints.add(stPoint2);
+
+        return Optional.of(stPoints.toArray(new STPoint[stPoints.size()]));
+    }
+
 
     public static boolean doesTrajectoryIntersectWithCube(SpatioTemporalPoint[] spt, double xMin, double yMin, double xMax, double yMax){
         for (int i = 0; i < spt.length-1; i++) {

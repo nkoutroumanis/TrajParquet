@@ -20,7 +20,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
 public class ExportWholeTrajectories {
     public static void main(String[] args) {
-        Config config = loadConfig(args[0]/*"export-trajectories.conf"*/);
+        Config config = loadConfig("src/main/resources/export-trajectories.conf");
 
         Config dataLoading = config.getConfig("export-trajectories");
         final String rawDataPath = dataLoading.getString("rawDataPath");

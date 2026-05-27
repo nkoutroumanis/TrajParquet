@@ -12,7 +12,6 @@ import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.io.api.Binary;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
@@ -24,6 +23,7 @@ import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
@@ -34,12 +34,12 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class BatchQueriesDirectoriesFrechet {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig(args[0]/*"queries-frechet.conf"*/);
+        Config config = loadConfig("src/main/resources/queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
-        final String queriesFileExport = dataLoading.getString("queriesFileExport");
+        final String metricsPath = dataLoading.getString("metricsPath");
         final double epsilon = dataLoading.getDouble("epsilon");
 
         Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
@@ -68,6 +68,8 @@ public class BatchQueriesDirectoriesFrechet {
         }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+
+        long startTime = System.currentTimeMillis();
 
         Broadcast br =  jsc.broadcast(hilbertCurve);
 
@@ -230,10 +232,10 @@ public class BatchQueriesDirectoriesFrechet {
 
         List<String> objectIds = objectIdQueryIdPairs.keys().distinct().collect();
 
-        FilterPredicate filterPredicate = eq(binaryColumn("objectId"), Binary.fromCharSequence(objectIds.get(0)));
-        for (int i = 1; i < objectIds.size(); i++) {
-            filterPredicate = or(eq(binaryColumn("objectId"), Binary.fromCharSequence(objectIds.get(i))), filterPredicate);
-        }
+        Set<Binary> oIds = new HashSet<>(objectIds.size());
+        objectIds.forEach(oId -> oIds.add(Binary.fromString(oId)));
+        FilterPredicate filterPredicate = in(binaryColumn("objectId"), oIds);
+
         ParquetInputFormat.setFilterPredicate(jobWholeTrajectory.getConfiguration(), filterPredicate);
 
         JavaPairRDD<Void, TrajectorySegment> trajectories = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath+File.separator+"idIndex", ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobWholeTrajectory.getConfiguration());
@@ -253,9 +255,16 @@ public class BatchQueriesDirectoriesFrechet {
                     }
                 });
 
+        System.out.println(results.count());
         results.collect().forEach(i->{
-            System.out.println(i._1+" "+Arrays.toString(i._2._1.getSpatioTemporalPoints())+"-"+Arrays.toString(i._2._2.getSpatioTemporalPoints()));
+            System.out.println(i._1+" "+i._2._2.getObjectId());
         });
+        long endTime = System.currentTimeMillis();
+
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-frechet-queries-batch-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        bw.write("Total Time (ms)\tTotal Pages\n");
+        bw.write((endTime-startTime) + "\t"+ DataPage.counter);
+        bw.close();
 
     }
 

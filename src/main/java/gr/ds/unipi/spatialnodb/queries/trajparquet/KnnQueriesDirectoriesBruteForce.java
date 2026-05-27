@@ -18,6 +18,7 @@ import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
@@ -27,12 +28,12 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class KnnQueriesDirectoriesBruteForce {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig(args[0]/*"knnQuery.conf"*/);
+        Config config = loadConfig("src/main/resources/queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
-        final String queriesFileExport = dataLoading.getString("queriesFileExport");
+        final String pathExport = dataLoading.getString("pathExport");
         final int k = dataLoading.getInt("k");
 
         Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
@@ -69,7 +70,7 @@ public class KnnQueriesDirectoriesBruteForce {
 
         List<Long> times = new ArrayList<>();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(queriesFileExport));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(pathExport+ File.separator+"knn-queries-bruteForce-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {

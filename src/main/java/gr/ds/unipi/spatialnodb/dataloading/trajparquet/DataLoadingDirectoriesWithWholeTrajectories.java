@@ -198,7 +198,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                                 double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
                                 long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
 
-                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(spts[i-1].getLongitude(), spts[i-1].getLatitude(), spts[i-1].getTimestamp(), spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp(), xMin, yMin, tMin, xMax, yMax, tMax );
+                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(spts[i-1].getLongitude(), spts[i-1].getLatitude(), spts[i-1].getTimestamp(), spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp(), xMin, yMin, tMin, xMax, yMax, tMax);
 
                                 List<Tuple3<Double, Double, Long>> newPoints = new ArrayList<>();
                                 if(stPoints.isPresent()){

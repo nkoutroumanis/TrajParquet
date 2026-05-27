@@ -7,6 +7,7 @@ import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.pathReadParquet.ParquetInputFormatWithKey;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.parquet.column.page.DataPage;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.io.api.Binary;
@@ -22,8 +23,11 @@ import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
@@ -34,12 +38,12 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class BatchQueriesDirectoriesRange {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig(args[0]/*"queries.conf"*/);
+        Config config = loadConfig("src/main/resources/queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
-        final String queriesFileExport = dataLoading.getString("queriesFileExport");
+        final String metricsPath = dataLoading.getString("metricsPath");
 
         Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
         final int bits = metadata.getInt("bits");
@@ -65,6 +69,8 @@ public class BatchQueriesDirectoriesRange {
         }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+
+        long startTime = System.currentTimeMillis();
 
         Broadcast br =  jsc.broadcast(hilbertCurve);
 
@@ -309,9 +315,27 @@ public class BatchQueriesDirectoriesRange {
 
         if(ungroupedResults!=null){
             JavaPairRDD<Long, TrajectorySegment> results = ungroupedResults.groupByKey().<Long, TrajectorySegment>flatMapToPair(concatenateTrajectoriesFunction);
-//            results.collect().forEach(System.out::println);
             System.out.println(results.count());
+//            for (Tuple2<Long, Iterable<TrajectorySegment>> longIterableTuple2 : results.groupByKey().sortByKey().collect()) {
+//
+//                int p = 0;
+//                int t=0;
+//                for (TrajectorySegment trajectorySegment : longIterableTuple2._2) {
+//                    p = p+ trajectorySegment.getSpatioTemporalPoints().length;
+//                    t++;
+//                }
+//                System.out.println(longIterableTuple2._1+";"+t+";"+p);
+//
+//            }
         }
+
+        long endTime = System.currentTimeMillis();
+
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-batch-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        bw.write("Total Time (ms)\tTotal Pages\n");
+        bw.write((endTime-startTime) + "\t"+ DataPage.counter);
+        bw.close();
+
     }
 
     private static int countPoints(String line) {

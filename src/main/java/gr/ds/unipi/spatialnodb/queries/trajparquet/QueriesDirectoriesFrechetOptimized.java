@@ -19,6 +19,7 @@ import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
@@ -27,12 +28,12 @@ import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.*;
 public class QueriesDirectoriesFrechetOptimized {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig(/*"queries-frechet.conf"*/args[0]);
+        Config config = loadConfig("src/main/resources/queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
-        final String queriesFileExport = dataLoading.getString("queriesFileExport");
+        final String metricsPath = dataLoading.getString("metricsPath");
         final double epsilon = dataLoading.getDouble("epsilon");
 
         Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
@@ -67,8 +68,9 @@ public class QueriesDirectoriesFrechetOptimized {
         }
 
         List<Long> times = new ArrayList<>();
+        List<Integer> pages = new ArrayList<>();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(queriesFileExport));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"frechet-queries-optimized-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
@@ -287,17 +289,24 @@ public class QueriesDirectoriesFrechetOptimized {
 //            System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
+            pages.add(DataPage.counter);
 
             bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter+";"+(t2-t1));
             DataPage.counter = 0;
             bw.newLine();
         }
-        for (int ind = 0; ind < 10; ind++) {
-            times.remove(0);
-        }
-        bw.write(times.stream().mapToLong(Long::longValue).average().getAsDouble()+"");
         bw.close();
         br.close();
+
+        for (int ind = 0; ind < 10; ind++) {
+            times.remove(0);
+            pages.remove(0);
+        }
+        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-frechet-queries-optimized-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\n");
+        bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
+        bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
+        bw.close();
 
 
     }

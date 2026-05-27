@@ -8,11 +8,13 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.Random;
 
+import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
+
 public class QueryGenerator {
 
     public static void main(String args[]) throws IOException {
 
-        Config config = AppConfig.newAppConfig(/*args[0]*/"src/main/resources/queryGenerator.conf").getConfig();
+        Config config = loadConfig("queryGenerator.conf");
 
         Config dataLoading = config.getConfig("queries");
 

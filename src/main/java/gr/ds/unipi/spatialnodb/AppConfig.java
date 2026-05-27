@@ -47,7 +47,10 @@ public class AppConfig {
                         "External config file not found: " + externalPath
                 );
             }
-            return ConfigFactory.parseFile(externalFile).resolve();
+//            return ConfigFactory.parseFile(externalFile).resolve();
+            return ConfigFactory.systemProperties()
+                    .withFallback(ConfigFactory.parseFile(externalFile))
+                    .resolve();
         } else {
             return ConfigFactory.parseResources(defaultResource).resolve();
         }
