@@ -2,20 +2,23 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
+import org.davidmoten.hilbert.Range;
 import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
@@ -25,18 +28,19 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
+import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 public class RangeQueriesDirectoriesImproved {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
         final String metricsPath = dataLoading.getString("metricsPath");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");
@@ -45,13 +49,26 @@ public class RangeQueriesDirectoriesImproved {
         final double maxLon = boundaries.getDouble("maxLon");
         final double maxLat = boundaries.getDouble("maxLat");
         final long maxTime = boundaries.getLong("maxTime");
+        final String indexType = metadata.getString("indexType");
 
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
 
-        Job job = Job.getInstance();
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
 
-        ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
+        Job jobIntersected = Job.getInstance();
+        Job jobFullyContains = Job.getInstance();
+
+        ParquetInputFormat.setReadSupportClass(jobIntersected, TrajectorySegmentReadSupport.class);
+        ParquetInputFormat.setReadSupportClass(jobFullyContains, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class}).setMaster("local[1]").set("spark.executor.memory","1g");
 
@@ -84,52 +101,57 @@ public class RangeQueriesDirectoriesImproved {
             double queryMaxLatitude = Double.parseDouble(queryParts[4]);
             long queryMaxTimestamp = Long.parseLong(queryParts[5]);
 
-//            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
-//            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
-//            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
+//            SpatioTemporalPoint queryLowerBound = new SpatioTemporalPoint(queryMinLongitude,queryMinLatitude,queryMinTimestamp);
+//            SpatioTemporalPoint queryUpperBound = new SpatioTemporalPoint(queryMaxLongitude,queryMaxLatitude,queryMaxTimestamp);
 
-//            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
+            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
+            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
+            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
-            long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            ParquetInputFormat.setFilterPredicate(jobIntersected.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
+
+            long[] hilStart = /*indexUtils.scale(queryLowerBound);*/indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);
+            long[] hilEnd = /*indexUtils.scale(queryUpperBound);*/indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);
             Ranges ranges = hilbertCurve.query(hilStart, hilEnd, 0);
             StringBuilder sbFullyCovers = new StringBuilder();
             StringBuilder sbIntersected = new StringBuilder();
+            boolean flag = false;
 
-            ranges.toList().forEach(range -> {
+            for (Range range : ranges.toList()) {
                 for (long r = range.low(); r <= range.high(); r++) {
                     if(directoriesSet.contains(String.valueOf(r))) {
                         long[] arr = hilbertCurve.point(r);
-                        if (arr[0] == hilStart[0] || arr[1] == hilStart[1] || arr[2] == hilStart[2]
-                                || arr[0] == hilEnd[0] || arr[1] == hilEnd[1] || arr[2] == hilEnd[2]) {
+                        for (int i = 0; i < arr.length; i++) {
+                            if(arr[i] == hilStart[i] || arr[i] == hilEnd[i]) {
+                                flag = true;
+                                break;
+                            }
+                        }
+                        if(flag) {
                             sbIntersected.append(parquetPath+ File.separator+"stIndex"+File.separator+r+",");
                         }else{
                             sbFullyCovers.append(parquetPath+ File.separator+"stIndex"+File.separator+r+",");
                         }
+                        flag = false;
                     }
                 }
-            });
+            }
 
-            if(sbIntersected.length()==0){
+            if(sbIntersected.length()==0 && sbFullyCovers.length()==0){
                 bw.write(0+";"+0+";"+0+";"+0);
                 DataPage.counter = 0;
                 bw.newLine();
                 continue;
             }
 
-
             if(sbFullyCovers.length() != 0){
                 sbFullyCovers.deleteCharAt(sbFullyCovers.length()-1);
             }
             sbIntersected.deleteCharAt(sbIntersected.length()-1);
 
-//            System.out.println("directoriesSet size"+directoriesSet.size());
-//            System.out.println("sb.string "+sb.toString());
-
             long startTime = System.currentTimeMillis();
 
-            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
-//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
+            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobIntersected.getConfiguration());
 
             JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD
 
@@ -137,7 +159,6 @@ public class RangeQueriesDirectoriesImproved {
 
                         List<TrajectorySegment> trajectoryList = new ArrayList<>();
                         List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
-//                        long segment = 1;
                         long segment = f.getSegment();
 
                         SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
@@ -152,20 +173,20 @@ public class RangeQueriesDirectoriesImproved {
                                     if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp() &&
                                             stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
 
-                                        if(currentSpatioTemporalPoints.size()!=0){
+                                        if(!currentSpatioTemporalPoints.isEmpty()){
                                             if(!currentSpatioTemporalPoints.get(currentSpatioTemporalPoints.size()-1).equals(spatioTemporalPoints[i])){
                                                 throw new Exception("The i th element of the segment should be the last point of the current list.");
                                             }
                                         }
 
-                                        if (currentSpatioTemporalPoints.size() == 0) {
+                                        if (currentSpatioTemporalPoints.isEmpty()) {
                                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 
                                     }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
 
-                                        if (currentSpatioTemporalPoints.size() == 0) {
+                                        if (currentSpatioTemporalPoints.isEmpty()) {
                                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
@@ -177,14 +198,14 @@ public class RangeQueriesDirectoriesImproved {
                                             throw new Exception("Exception for the current list, it will be flushed and has only one element.");
                                         }
 
-                                        if (currentSpatioTemporalPoints.size() != 0) {
+                                        if (!currentSpatioTemporalPoints.isEmpty()) {
                                             trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                             currentSpatioTemporalPoints.clear();
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i+1].getLongitude(), spatioTemporalPoints[i+1].getLatitude(), spatioTemporalPoints[i+1].getTimestamp()));
                                     }else{
-                                        if(currentSpatioTemporalPoints.size()!=0){
+                                        if(!currentSpatioTemporalPoints.isEmpty()){
                                             throw new Exception("The current list has elements while it should not have.");
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
@@ -197,14 +218,14 @@ public class RangeQueriesDirectoriesImproved {
                                 }
 
                             }else{
-                                if (currentSpatioTemporalPoints.size() > 0) {
+                                if (!currentSpatioTemporalPoints.isEmpty()) {
                                     trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                     currentSpatioTemporalPoints.clear();
                                 }
                             }
 
                         }
-                        if (currentSpatioTemporalPoints.size() > 0) {
+                        if (!currentSpatioTemporalPoints.isEmpty()) {
                             trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                             currentSpatioTemporalPoints.clear();
                         }
@@ -212,7 +233,57 @@ public class RangeQueriesDirectoriesImproved {
                     });
 
             if(sbFullyCovers.length()!=0){
-                pairRDDRangeQuery = pairRDDRangeQuery.union((JavaPairRDD<Void, TrajectorySegment>)jsc.newAPIHadoopFile(sbFullyCovers.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration()));
+                if(indexUtils instanceof IndexUtils2D){
+                    tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
+                    ParquetInputFormat.setFilterPredicate(jobFullyContains.getConfiguration(), tAxis);
+                }
+
+                JavaPairRDD<Void, TrajectorySegment> fullyIntersectedPairRDD = (JavaPairRDD<Void, TrajectorySegment>)jsc.newAPIHadoopFile(sbFullyCovers.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobFullyContains.getConfiguration());
+                if(indexUtils instanceof IndexUtils2D){
+                    fullyIntersectedPairRDD = fullyIntersectedPairRDD.flatMapValues(f->{
+                        List<TrajectorySegment> trajectoryList = new ArrayList<>();
+                        List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
+                        long segment = f.getSegment();
+
+                        SpatioTemporalPoint[] spatioTemporalPoints = f.getSpatioTemporalPoints();
+                        boolean previous = false;
+
+                        if(HilbertUtil.inTimeWindow(spatioTemporalPoints[0].getTimestamp(), queryMinTimestamp, queryMaxTimestamp)){
+                            currentSpatioTemporalPoints.add(spatioTemporalPoints[0]);
+                            previous = true;
+                        }
+
+                        for (int i = 1; i < spatioTemporalPoints.length; i++) {
+                            if(previous || HilbertUtil.timeIntervalsIntersect(spatioTemporalPoints[i-1].getTimestamp(),spatioTemporalPoints[i].getTimestamp(),queryMinTimestamp,queryMaxTimestamp)){
+                                if(previous && HilbertUtil.inTimeWindow(spatioTemporalPoints[i].getTimestamp(), queryMinTimestamp, queryMaxTimestamp)){
+                                    currentSpatioTemporalPoints.add(spatioTemporalPoints[i]);
+                                }else{
+                                    Optional<STPoint[]> stPoint = HilbertUtil.liangBarsky(spatioTemporalPoints[i-1].getLongitude(),spatioTemporalPoints[i-1].getLatitude(),spatioTemporalPoints[i-1].getTimestamp(), spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp(),queryMinLongitude, queryMinLatitude, queryMinTimestamp, queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);
+                                    if(previous){
+                                        currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[1].getX(), stPoint.get()[1].getY(), stPoint.get()[1].getT()));
+                                        break;
+                                    }else if (HilbertUtil.inTimeWindow(spatioTemporalPoints[i].getTimestamp(), queryMinTimestamp, queryMaxTimestamp)) {
+                                        currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[0].getX(), stPoint.get()[0].getY(), stPoint.get()[0].getT()));
+                                        currentSpatioTemporalPoints.add(spatioTemporalPoints[i]);
+                                        previous = true;
+                                    }else{
+                                        currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[0].getX(), stPoint.get()[0].getY(), stPoint.get()[0].getT()));
+                                        currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[1].getX(), stPoint.get()[1].getY(), stPoint.get()[1].getT()));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!currentSpatioTemporalPoints.isEmpty()) {
+                            trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
+                            currentSpatioTemporalPoints.clear();
+                        }
+
+                        return trajectoryList.iterator();
+                    });
+                }
+                pairRDDRangeQuery = pairRDDRangeQuery.union(fullyIntersectedPairRDD);
             }
 
             pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDDRangeQuery.groupBy(f->f._2.getObjectId()).flatMapToPair(f->{
@@ -250,7 +321,7 @@ public class RangeQueriesDirectoriesImproved {
                         }
 
                         //leftovers
-                        if(currentMerged.size()>0){
+                        if(!currentMerged.isEmpty()){
                             finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1,++segmentNum, currentMerged)));
                         }
                         return finalList.iterator();
@@ -287,4 +358,11 @@ public class RangeQueriesDirectoriesImproved {
         bw.close();
 
     }
+    //                jobIntersected.getConfiguration().unset("parquet.private.read.filter.predicate");
+//                jobIntersected.getConfiguration().iterator().forEachRemaining(e -> {
+//                    String key = e.getKey();
+//                    if (key.contains("parquet")) {
+//                        System.out.println(key + " = " + e.getValue());
+//                    }
+//                });
 }

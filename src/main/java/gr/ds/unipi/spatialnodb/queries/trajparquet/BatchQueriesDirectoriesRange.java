@@ -3,14 +3,16 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.pathReadParquet.ParquetInputFormatWithKey;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
-import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
-import org.apache.parquet.io.api.Binary;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -31,9 +33,6 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
-import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.doesTrajectoryIntersectWithCube;
-import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.isTrajectoryDistanceLessThanEpsilonToCube;
-import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 public class BatchQueriesDirectoriesRange {
     public static void main(String args[]) throws IOException {
@@ -45,7 +44,7 @@ public class BatchQueriesDirectoriesRange {
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
         final String metricsPath = dataLoading.getString("metricsPath");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");
@@ -54,9 +53,20 @@ public class BatchQueriesDirectoriesRange {
         final double maxLon = boundaries.getDouble("maxLon");
         final double maxLat = boundaries.getDouble("maxLat");
         final long maxTime = boundaries.getLong("maxTime");
+        final String indexType = metadata.getString("indexType");
 
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
+
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
 
         Job job = Job.getInstance();
 

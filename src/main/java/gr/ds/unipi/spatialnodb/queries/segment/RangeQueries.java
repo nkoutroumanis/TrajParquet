@@ -3,7 +3,7 @@ package gr.ds.unipi.spatialnodb.queries.segment;
 import com.typesafe.config.Config;
 import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.segment.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.segment.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.segment.TrajectorySegmentReadSupport;
 import org.apache.hadoop.mapreduce.Job;

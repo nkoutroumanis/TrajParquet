@@ -1,9 +1,8 @@
 package gr.ds.unipi.spatialnodb.queries.trajparquetold;
 
 import com.typesafe.config.Config;
-import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegmentReadSupport;
 import org.apache.hadoop.mapreduce.Job;
@@ -26,7 +25,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class RangeQueriesActualPoints {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -38,6 +37,9 @@ public class RangeQueriesActualPoints {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
@@ -80,14 +82,14 @@ public class RangeQueriesActualPoints {
                             if(HilbertUtil.inBox(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp(),queryMinLongitude, queryMinLatitude, queryMinTimestamp, queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp)){
                                 currentSpatioTemporalPoints.add(spatioTemporalPoints[i]);
                             }else{
-                                if(currentSpatioTemporalPoints.size()!=0){
+                                if(!currentSpatioTemporalPoints.isEmpty()){
                                     trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                     currentSpatioTemporalPoints.clear();
                                 }
                             }
 
                         }
-                        if (currentSpatioTemporalPoints.size() > 0) {
+                        if (!currentSpatioTemporalPoints.isEmpty()) {
                             trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                             currentSpatioTemporalPoints.clear();
                         }
@@ -133,7 +135,7 @@ public class RangeQueriesActualPoints {
                         }
 
                         //leftovers
-                        if(currentMerged.size()>0){
+                        if(!currentMerged.isEmpty()){
                             finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1,++segmentNum, currentMerged)));
                         }
                         return finalList.iterator();

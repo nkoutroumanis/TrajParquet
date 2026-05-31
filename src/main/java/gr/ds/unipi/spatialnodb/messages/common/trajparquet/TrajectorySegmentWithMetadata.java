@@ -1,5 +1,7 @@
 package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 
+import gr.ds.unipi.spatialnodb.messages.common.SpatialPoint;
+
 import java.io.Serializable;
 
 public class TrajectorySegmentWithMetadata implements Serializable {

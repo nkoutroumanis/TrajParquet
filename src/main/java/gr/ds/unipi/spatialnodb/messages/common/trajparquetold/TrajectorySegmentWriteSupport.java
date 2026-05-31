@@ -4,6 +4,7 @@ package gr.ds.unipi.spatialnodb.messages.common.trajparquetold;
 //import fi.iki.yak.ts.compression.gorilla.Compressor;
 //import gr.aueb.delorean.chimp.ChimpN;
 //import gr.aueb.delorean.chimp.ChimpNNoIndex;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;

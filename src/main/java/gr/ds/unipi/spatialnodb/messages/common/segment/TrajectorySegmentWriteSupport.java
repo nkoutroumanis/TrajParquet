@@ -1,5 +1,6 @@
 package gr.ds.unipi.spatialnodb.messages.common.segment;
 
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;

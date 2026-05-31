@@ -6,12 +6,12 @@ import com.typesafe.config.ConfigRenderOptions;
 import com.typesafe.config.ConfigValueFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.hadoop.MultipleParquetOutputsFormat;
+import gr.ds.unipi.spatialnodb.messages.common.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.spark.HashPartitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -24,7 +24,6 @@ import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 import scala.Tuple3;
-import scala.Tuple6;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -39,7 +38,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class DataLoadingDirectoriesWithWholeTrajectories {
     public static void main(String[] args) throws IOException {
 
-        Config config = loadConfig("src/main/resources/data-loading.conf");
+        Config config = loadConfig("data-loading.conf");
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -51,12 +50,16 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
         final String metricsPathExport = dataLoading.getString("metricsPathExport");
-
+        final String indexType = dataLoading.getString("indexType");
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
         Config hilbert = dataLoading.getConfig("hilbert");
 
         final int bits = hilbert.getInt("bits");
 
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
 
         Job job = Job.getInstance();
@@ -153,6 +156,12 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         final double maxLat = bounds.getMaxLatitude()+0.0000001;
         final long maxTime = bounds.getMaxTimestamp()+1000;
 
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
+
         ParquetOutputFormat.setWriteSupportClass(job, TrajectorySegmentWithMetadataWriteSupport.class);
         JavaPairRDD segmentedTrajectoriesRDD = trajectoriesRDD.flatMapToPair(f-> {
             
@@ -164,13 +173,13 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
 
             //initialize for the currentHilValue
             int part = 1;
-            long[] hil1 = HilbertUtil.scaleGeoTemporalPoint(spts[0].getLongitude(), minLon, maxLon, spts[0].getLatitude(), minLat, maxLat, spts[0].getTimestamp(), minTime, maxTime, maxOrdinates);
+            long[] hil1 = indexUtils.scale(spts[0]);//indexType.equals("3D")?HilbertUtil.scaleGeoTemporalPoint(spts[0].getLongitude(), minLon, maxLon, spts[0].getLatitude(), minLat, maxLat, spts[0].getTimestamp(), minTime, maxTime, maxOrdinates):HilbertUtil.scaleGeoPoint(spts[0].getLongitude(), minLon, maxLon, spts[0].getLatitude(), minLat, maxLat, maxOrdinates);
             Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil1, hil1, 0);
             long currentHilValue = ranges.toList().get(0).low();
             currentPart.add(new SpatioTemporalPoint(spts[0].getLongitude(), spts[0].getLatitude(),spts[0].getTimestamp()));
 
             for (int i = 1; i < spts.length; i++) {
-                long[] hil2 = HilbertUtil.scaleGeoTemporalPoint(spts[i].getLongitude(), minLon, maxLon, spts[i].getLatitude(), minLat, maxLat, spts[i].getTimestamp(), minTime, maxTime, maxOrdinates);
+                long[] hil2 = indexUtils.scale(spts[i]);//indexType.equals("3D")?HilbertUtil.scaleGeoTemporalPoint(spts[i].getLongitude(), minLon, maxLon, spts[i].getLatitude(), minLat, maxLat, spts[i].getTimestamp(), minTime, maxTime, maxOrdinates):HilbertUtil.scaleGeoPoint(spts[i].getLongitude(), minLon, maxLon, spts[i].getLatitude(), minLat, maxLat, maxOrdinates);
                 ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil2, hil2, 0);
                 long hilbertValue = ranges.toList().get(0).low();
 
@@ -190,15 +199,21 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                             for (long cubeIndex = range.low(); cubeIndex<=range.high();cubeIndex++){
                                 long[] cube =  ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).point(cubeIndex);
 
-                                double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
-                                double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
-                                long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
-
-                                double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
-                                double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
-                                long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
-
-                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(spts[i-1].getLongitude(), spts[i-1].getLatitude(), spts[i-1].getTimestamp(), spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp(), xMin, yMin, tMin, xMax, yMax, tMax);
+                                Optional<STPoint[]> stPoints = indexUtils.clipping(cube,spts[i-1],spts[i]);
+//                                double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
+//                                double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
+//
+//                                double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
+//                                double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
+//
+//                                Optional<STPoint[]> stPoints;
+//                                if(indexType.equals("3D")){
+//                                    long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
+//                                    long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
+//                                    stPoints = HilbertUtil.liangBarsky(spts[i-1].getLongitude(), spts[i-1].getLatitude(), spts[i-1].getTimestamp(), spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp(), xMin, yMin, tMin, xMax, yMax, tMax);
+//                                }else{
+//                                    stPoints=HilbertUtil.liangBarskyTimeInterpolation(spts[i-1].getLongitude(), spts[i-1].getLatitude(), spts[i-1].getTimestamp(), spts[i].getLongitude(), spts[i].getLatitude(), spts[i].getTimestamp(), xMin, yMin, xMax, yMax);
+//                                }
 
                                 List<Tuple3<Double, Double, Long>> newPoints = new ArrayList<>();
                                 if(stPoints.isPresent()){
@@ -320,20 +335,12 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                         trajectoryParts.add(Tuple2.apply(passingSegment._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, passingSegment._2, Math.min(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.min(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[0].getTimestamp(), Math.max(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.max(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[1].getTimestamp()), null)));
                     }
 
-//                    if(passingSegments.size()>0) {
-//                        if (passingSegments.get(passingSegments.size() - 1)._2[passingSegments.get(passingSegments.size() - 1)._2.length - 1].getTimestamp() != pointBegin.getTimestamp()) {
-//                            System.out.println(passingSegments.get(passingSegments.size() - 1)._2[passingSegments.get(passingSegments.size() - 1)._2.length - 1].getTimestamp() + " "+ pointBegin.getTimestamp());
-//                            throw new Exception("HERE EXCEptION "+f._1 +" passingsegs"+passingSegments.get(passingSegments.size()-1)._2.length);
-//                        }
-//                    }
-
                     for (int i1 = 1; i1 < passingSegments.size(); i1++) {
                         if(passingSegments.get(i1-1)._2[1].getTimestamp() != passingSegments.get(i1)._2[0].getTimestamp() || passingSegments.get(i1-1)._2[1].getLongitude() != passingSegments.get(i1)._2[0].getLongitude() || passingSegments.get(i1-1)._2[1].getLatitude() != passingSegments.get(i1)._2[0].getLatitude()){
                             passingSegments.forEach(pair-> System.out.println(pair._2[0] + "-"+pair._2[1]));
                             throw new Exception("Problem with the passing segments list. A point seems not to be the same with the first point in the next segment. Object id: "+objectId+" Points: "+passingSegments.get(i1-1)._2[1] + " "+passingSegments.get(i1)._2[0]);
                         }
                     }
-
 
                     passingSegments.clear();
 
@@ -449,29 +456,23 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
             Tuple2<Long,TrajectorySegmentWithMetadata> newTrjSeg = new Tuple2<>(trjSeg._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(trjSeg._2.getTrajectorySegment().getObjectId(), -1* trjSeg._2.getTrajectorySegment().getSegment(), trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints(), trjSeg._2.getTrajectorySegment().getMinLongitude(), trjSeg._2.getTrajectorySegment().getMinLatitude(), trjSeg._2.getTrajectorySegment().getMinTimestamp(), trjSeg._2.getTrajectorySegment().getMaxLongitude(), trjSeg._2.getTrajectorySegment().getMaxLatitude(), trjSeg._2.getTrajectorySegment().getMaxTimestamp()), pivots.toArray(new SpatialPoint[0])));
             trajectoryParts.set(trajectoryParts.size()-1, newTrjSeg);
 
-//            trajectoryParts.forEach(ll->{
-//                if(ll._2.getTrajectorySegment().getObjectId().equals("256208000") && ll._2.getTrajectorySegment().getSegment()==21){
-//                    System.out.println("EXIT "+ ll._1);
-//                    System.exit(1);
-//                }
-//            });
-
             return trajectoryParts.iterator();
 
-        }).repartitionAndSortWithinPartitions(new HashPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1+"/", null), f._2));
+        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getTrajectorySegment().getMinTimestamp()),t._2);}).repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1.getHilbertKey()+"/", null), f._2));
         segmentedTrajectoriesRDD.saveAsNewAPIHadoopFile(writePath+File.separator+"stIndex", Void.class, TrajectorySegmentWithMetadata.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
 
         Config metadataFile = ConfigFactory.empty()
-                .withValue("grid3DHilbert.bits", ConfigValueFactory.fromAnyRef(bits))
-                .withValue("grid3DHilbert.boundaries.minLon", ConfigValueFactory.fromAnyRef(minLon))
-                .withValue("grid3DHilbert.boundaries.minLat", ConfigValueFactory.fromAnyRef(minLat))
-                .withValue("grid3DHilbert.boundaries.minTime", ConfigValueFactory.fromAnyRef(minTime))
-                .withValue("grid3DHilbert.boundaries.maxLon", ConfigValueFactory.fromAnyRef(maxLon))
-                .withValue("grid3DHilbert.boundaries.maxLat", ConfigValueFactory.fromAnyRef(maxLat))
-                .withValue("grid3DHilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime));
+                .withValue("gridHilbert.indexType", ConfigValueFactory.fromAnyRef(indexType))
+                .withValue("gridHilbert.bits", ConfigValueFactory.fromAnyRef(bits))
+                .withValue("gridHilbert.boundaries.minLon", ConfigValueFactory.fromAnyRef(minLon))
+                .withValue("gridHilbert.boundaries.minLat", ConfigValueFactory.fromAnyRef(minLat))
+                .withValue("gridHilbert.boundaries.minTime", ConfigValueFactory.fromAnyRef(minTime))
+                .withValue("gridHilbert.boundaries.maxLon", ConfigValueFactory.fromAnyRef(maxLon))
+                .withValue("gridHilbert.boundaries.maxLat", ConfigValueFactory.fromAnyRef(maxLat))
+                .withValue("gridHilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime));
 
         String json = metadataFile.root().render(
                 ConfigRenderOptions.defaults()

@@ -6,7 +6,7 @@ import com.uber.h3core.H3Core;
 import com.uber.h3core.util.LatLng;
 import gr.ds.unipi.spatialnodb.shapes.Point;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv8.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.bson.*;
 import org.bson.codecs.BsonDocumentCodec;

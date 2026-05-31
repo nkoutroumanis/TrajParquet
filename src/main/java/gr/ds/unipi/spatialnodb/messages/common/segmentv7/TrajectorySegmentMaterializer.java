@@ -1,6 +1,7 @@
 package gr.ds.unipi.spatialnodb.messages.common.segmentv7;
 
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.parquet.io.api.*;
 
 import java.util.ArrayList;

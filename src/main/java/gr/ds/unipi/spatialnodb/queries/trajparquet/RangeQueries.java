@@ -1,9 +1,8 @@
 package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
-import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
@@ -30,7 +29,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class RangeQueries {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -72,8 +71,7 @@ public class RangeQueries {
             ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
             long startTime = System.currentTimeMillis();
 
-            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
-//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
+            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath+File.separator, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
 
             JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD
 
@@ -95,20 +93,20 @@ public class RangeQueries {
                                     if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp() &&
                                             stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
 
-                                        if(currentSpatioTemporalPoints.size()!=0){
+                                        if(!currentSpatioTemporalPoints.isEmpty()){
                                             if(!currentSpatioTemporalPoints.get(currentSpatioTemporalPoints.size()-1).equals(spatioTemporalPoints[i])){
                                                 throw new Exception("The i th element of the segment should be the last point of the current list.");
                                             }
                                         }
 
-                                        if (currentSpatioTemporalPoints.size() == 0) {
+                                        if (currentSpatioTemporalPoints.isEmpty()) {
                                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 
                                     }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
 
-                                        if (currentSpatioTemporalPoints.size() == 0) {
+                                        if (currentSpatioTemporalPoints.isEmpty()) {
                                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
@@ -120,14 +118,14 @@ public class RangeQueries {
                                             throw new Exception("Exception for the current list, it will be flushed and has only one element.");
                                         }
 
-                                        if (currentSpatioTemporalPoints.size() != 0) {
+                                        if (!currentSpatioTemporalPoints.isEmpty()) {
                                             trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                             currentSpatioTemporalPoints.clear();
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i+1].getLongitude(), spatioTemporalPoints[i+1].getLatitude(), spatioTemporalPoints[i+1].getTimestamp()));
                                     }else{
-                                        if(currentSpatioTemporalPoints.size()!=0){
+                                        if(!currentSpatioTemporalPoints.isEmpty()){
                                             throw new Exception("The current list has elements while it should not have.");
                                         }
                                         currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
@@ -140,14 +138,14 @@ public class RangeQueries {
                                 }
 
                             }else{
-                                if (currentSpatioTemporalPoints.size() > 0) {
+                                if (!currentSpatioTemporalPoints.isEmpty()) {
                                     trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                     currentSpatioTemporalPoints.clear();
                                 }
                             }
 
                         }
-                        if (currentSpatioTemporalPoints.size() > 0) {
+                        if (!currentSpatioTemporalPoints.isEmpty()) {
                             trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                             currentSpatioTemporalPoints.clear();
                         }
@@ -188,7 +186,7 @@ public class RangeQueries {
                         }
 
                         //leftovers
-                        if(currentMerged.size()>0){
+                        if(!currentMerged.isEmpty()){
                             finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1,++segmentNum, currentMerged)));
                         }
                         return finalList.iterator();

@@ -1,5 +1,7 @@
 package gr.ds.unipi.spatialnodb.messages.common.spatialparquet;
 
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;

@@ -3,18 +3,15 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.parquet.column.page.DataPage;
-import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
-import org.apache.parquet.io.api.Binary;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
-import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 
 import java.io.*;
@@ -22,8 +19,6 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
-import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.doesTrajectoryIntersectWithCube;
-import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 public class KnnQueriesDirectoriesBruteForce {
     public static void main(String args[]) throws IOException {
@@ -36,7 +31,7 @@ public class KnnQueriesDirectoriesBruteForce {
         final String pathExport = dataLoading.getString("pathExport");
         final int k = dataLoading.getInt("k");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");

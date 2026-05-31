@@ -9,7 +9,7 @@ import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.DefaultArraySerializers;
 //import gr.aueb.delorean.chimp.Chimp;
 //import gr.aueb.delorean.chimp.ChimpDecompressor;
-import gr.ds.unipi.spatialnodb.messages.common.segmentv5.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.shapes.Point;
 import org.junit.Ignore;
 import org.junit.Test;

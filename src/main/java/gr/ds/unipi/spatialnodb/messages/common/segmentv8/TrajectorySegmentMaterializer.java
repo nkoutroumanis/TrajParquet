@@ -1,5 +1,6 @@
 package gr.ds.unipi.spatialnodb.messages.common.segmentv8;
 
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.parquet.io.api.*;
 
 import java.nio.ByteBuffer;

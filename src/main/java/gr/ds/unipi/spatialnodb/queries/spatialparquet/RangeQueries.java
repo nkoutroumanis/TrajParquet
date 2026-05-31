@@ -1,14 +1,14 @@
 package gr.ds.unipi.spatialnodb.queries.spatialparquet;
 
 import com.typesafe.config.Config;
-import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.spatialparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.spatialparquet.TrajectorySegmentReadSupport;
-import gr.ds.unipi.spatialnodb.messages.common.spatialparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -24,11 +24,12 @@ import java.util.List;
 import java.util.Optional;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
+import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 public class RangeQueries {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -40,6 +41,10 @@ public class RangeQueries {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Range Querying in SpatialParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
@@ -62,7 +67,7 @@ public class RangeQueries {
 //            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
 //            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
 //            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
-
+//
 //            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
             long startTime = System.currentTimeMillis();
 

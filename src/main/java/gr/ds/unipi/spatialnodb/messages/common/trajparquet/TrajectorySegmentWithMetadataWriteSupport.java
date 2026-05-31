@@ -5,6 +5,8 @@ package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 //import gr.aueb.delorean.chimp.ChimpN;
 //import gr.aueb.delorean.chimp.ChimpNNoIndex;
 
+import gr.ds.unipi.spatialnodb.messages.common.SpatialPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.api.Binary;
@@ -13,7 +15,6 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashMap;
 
 public class TrajectorySegmentWithMetadataWriteSupport extends WriteSupport<TrajectorySegmentWithMetadata> {

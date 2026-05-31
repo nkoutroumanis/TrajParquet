@@ -4,6 +4,7 @@ package gr.ds.unipi.spatialnodb.messages.common.trajparquetold;
 //import fi.iki.yak.ts.compression.gorilla.Decompressor;
 //import fi.iki.yak.ts.compression.gorilla.Value;
 //import gr.aueb.delorean.chimp.ChimpNDecompressor;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.parquet.io.api.*;
 
 import java.nio.ByteBuffer;

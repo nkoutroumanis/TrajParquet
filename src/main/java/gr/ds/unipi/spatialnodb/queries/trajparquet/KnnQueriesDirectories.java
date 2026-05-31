@@ -3,6 +3,7 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
@@ -36,7 +37,7 @@ public class KnnQueriesDirectories {
         final String metricsPath = dataLoading.getString("metricsPath");
         final int k = dataLoading.getInt("k");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");
@@ -45,19 +46,29 @@ public class KnnQueriesDirectories {
         final double maxLon = boundaries.getDouble("maxLon");
         final double maxLat = boundaries.getDouble("maxLat");
         final long maxTime = boundaries.getLong("maxTime");
+        final String indexType = metadata.getString("indexType");
 
-        int queriedTrajectoriesCounter = 0;
-
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
+
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
 
         Job jobWholeTrajectory = Job.getInstance();
         Job jobTrajectorySegments = Job.getInstance();
+        int queriedTrajectoriesCounter = 0;
 
         ParquetInputFormat.setReadSupportClass(jobWholeTrajectory, TrajectorySegmentReadSupport.class);
         ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialReadSupport.class);
 
-        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class,SpatialPoint.class,SpatialPoint[].class, Double.class});
+        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class, SpatialPoint.class,SpatialPoint[].class, Double.class});
         sparkConf.setAppName("Knn Querying in TrajParquet");
         if (!sparkConf.contains("spark.master")) {
             sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");

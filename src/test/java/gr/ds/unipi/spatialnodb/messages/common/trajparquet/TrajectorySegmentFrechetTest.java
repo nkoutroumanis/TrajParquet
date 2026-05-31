@@ -1,6 +1,7 @@
 package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import junit.framework.TestCase;
 
 public class TrajectorySegmentFrechetTest extends TestCase {

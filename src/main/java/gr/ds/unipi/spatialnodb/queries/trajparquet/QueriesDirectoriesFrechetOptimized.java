@@ -3,7 +3,10 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
 import org.apache.hadoop.mapreduce.Job;
@@ -28,7 +31,7 @@ import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.*;
 public class QueriesDirectoriesFrechetOptimized {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -36,7 +39,7 @@ public class QueriesDirectoriesFrechetOptimized {
         final String metricsPath = dataLoading.getString("metricsPath");
         final double epsilon = dataLoading.getDouble("epsilon");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");
@@ -45,9 +48,20 @@ public class QueriesDirectoriesFrechetOptimized {
         final double maxLon = boundaries.getDouble("maxLon");
         final double maxLat = boundaries.getDouble("maxLat");
         final long maxTime = boundaries.getLong("maxTime");
+        final String indexType = metadata.getString("indexType");
 
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
+
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
 
         Job job = Job.getInstance();
 

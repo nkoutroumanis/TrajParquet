@@ -2,6 +2,7 @@ package gr.ds.unipi.spatialnodb.messages.common.segmentv5;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import org.apache.parquet.io.api.*;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 

@@ -2,14 +2,17 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import gr.ds.unipi.spatialnodb.AppConfig;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
+import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -25,19 +28,20 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
+import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
 
 public class RangeQueriesDirectories {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
         final String queriesFilePath = dataLoading.getString("queriesFilePath");
         final String metricsPath = dataLoading.getString("metricsPath");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("grid3DHilbert");
+        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");
@@ -46,9 +50,20 @@ public class RangeQueriesDirectories {
         final double maxLon = boundaries.getDouble("maxLon");
         final double maxLat = boundaries.getDouble("maxLat");
         final long maxTime = boundaries.getLong("maxTime");
+        final String indexType = metadata.getString("indexType");
 
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
+
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
 
         Job job = Job.getInstance();
 
@@ -84,20 +99,20 @@ public class RangeQueriesDirectories {
             double queryMaxLatitude = Double.parseDouble(queryParts[4]);
             long queryMaxTimestamp = Long.parseLong(queryParts[5]);
 
-//            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
-//            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
-//            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
-//
-//            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
+            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
+            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
+            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
-            long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
+
+            long[] hilStart = /*indexUtils.scale(queryLowerBound);*/indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);
+            long[] hilEnd = /*indexUtils.scale(queryUpperBound);*/indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);
             Ranges ranges = hilbertCurve.query(hilStart, hilEnd, 0);
             StringBuilder sb = new StringBuilder();
             ranges.toList().forEach(range -> {
                 for (long r = range.low(); r <= range.high(); r++) {
                     if(directoriesSet.contains(String.valueOf(r))){
-                        sb.append(parquetPath+"/"+r+",");
+                        sb.append(parquetPath+ File.separator+"stIndex"+File.separator+r+",");
                     }
                 }
             });
@@ -109,13 +124,9 @@ public class RangeQueriesDirectories {
             }
             sb.deleteCharAt(sb.length()-1);
 
-//            System.out.println("directoriesSet size"+directoriesSet.size());
-//            System.out.println("sb.string "+sb.toString());
-
             long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString()/*parquetPath*/, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
-//            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
 
             JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD
 
@@ -137,19 +148,19 @@ public class RangeQueriesDirectories {
                             if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp() &&
                                     stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
 
-                                if(currentSpatioTemporalPoints.size()!=0){
+                                if(!currentSpatioTemporalPoints.isEmpty()){
                                     if(!currentSpatioTemporalPoints.get(currentSpatioTemporalPoints.size()-1).equals(spatioTemporalPoints[i])){
                                         throw new Exception("The i th element of the segment should be the last point of the current list.");
                                     }
                                 }
 
-                                if (currentSpatioTemporalPoints.size() == 0) {
+                                if (currentSpatioTemporalPoints.isEmpty()) {
                                     currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 
                             }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
-                                if (currentSpatioTemporalPoints.size() == 0) {
+                                if (currentSpatioTemporalPoints.isEmpty()) {
                                     currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
@@ -161,14 +172,14 @@ public class RangeQueriesDirectories {
                                     throw new Exception("Exception for the current list, it will be flushed and has only one element.");
                                 }
 
-                                if (currentSpatioTemporalPoints.size() != 0) {
+                                if (!currentSpatioTemporalPoints.isEmpty()) {
                                     trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                                     currentSpatioTemporalPoints.clear();
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i+1].getLongitude(), spatioTemporalPoints[i+1].getLatitude(), spatioTemporalPoints[i+1].getTimestamp()));
                             }else{
-                                if(currentSpatioTemporalPoints.size()!=0){
+                                if(!currentSpatioTemporalPoints.isEmpty()){
                                     throw new Exception("The current list has elements while it should not have.");
                                 }
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
@@ -181,14 +192,14 @@ public class RangeQueriesDirectories {
                         }
 
                     }else{
-                        if (currentSpatioTemporalPoints.size() > 0) {
+                        if (!currentSpatioTemporalPoints.isEmpty()) {
                             trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                             currentSpatioTemporalPoints.clear();
                         }
                     }
 
                 }
-                if (currentSpatioTemporalPoints.size() > 0) {
+                if (!currentSpatioTemporalPoints.isEmpty()) {
                     trajectoryList.add(new TrajectorySegment(f.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0));
                     currentSpatioTemporalPoints.clear();
                 }
@@ -229,7 +240,7 @@ public class RangeQueriesDirectories {
                         }
 
                         //leftovers
-                        if(currentMerged.size()>0){
+                        if(!currentMerged.isEmpty()){
                             finalList.add(Tuple2.apply(null,new TrajectorySegment(f._1,++segmentNum, currentMerged)));
                         }
                         return finalList.iterator();

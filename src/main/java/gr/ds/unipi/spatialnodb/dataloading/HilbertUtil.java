@@ -1,6 +1,6 @@
 package gr.ds.unipi.spatialnodb.dataloading;
 
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
+import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.shapes.Point;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 
@@ -103,6 +103,9 @@ public class HilbertUtil {
         return (long) (((t2-t1)/(x2-x1))*(x-x1))+t1;
     }
 
+    public static boolean timeIntervalsIntersect(long start1, long end1, long start2, long end2) {
+        return start1 <= end2 && start2 <= end1;
+    }
 
     public static boolean pointInRectangle(double x, double y, double xmin, double ymin, double xmax, double ymax) {
         return Double.compare(x, xmax) == -1 && Double.compare(x, xmin) != -1
@@ -309,6 +312,10 @@ public class HilbertUtil {
         return Double.compare(x, xMin) != -1 && Double.compare(x, xMax) != 1 &&
                 Double.compare(y, yMin) != -1 && Double.compare(y, yMax) != 1 &&
                 Long.compare(t, tMin) != -1 && Long.compare(t, tMax) != 1;
+    }
+
+    public static boolean inTimeWindow(long t, long tMin, long tMax){
+        return Long.compare(t, tMin) != -1 && Long.compare(t, tMax) != 1;
     }
 
     public static double euclideanDistance(double x1, double y1, double x2, double y2) {

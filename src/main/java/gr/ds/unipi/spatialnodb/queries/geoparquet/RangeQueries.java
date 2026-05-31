@@ -32,7 +32,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.*;
 public class RangeQueries {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -44,6 +44,10 @@ public class RangeQueries {
         ParquetInputFormat.setReadSupportClass(job, TrajectoryReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Range Querying in GeoParquet");
+        if (!sparkConf.contains("spark.master")) {
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+        }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
@@ -101,7 +105,7 @@ public class RangeQueries {
                                     }
                                 }
 
-                                if (currentCoordinates.size() == 0) {
+                                if (currentCoordinates.isEmpty()) {
                                     currentCoordinates.add(new Coordinate(coordinates[i].x,coordinates[i].y));
                                     currentTimestamps.add(f.getTimestamps()[i]);
                                 }
@@ -110,7 +114,7 @@ public class RangeQueries {
                             }else if(stPoints.get()[0].getT() == f.getTimestamps()[i]){
 //                                    }else if(stPoints.get()[0].equals(new STPoint(spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp()))){
 
-                                if (currentCoordinates.size() == 0) {
+                                if (currentCoordinates.isEmpty()) {
                                     currentCoordinates.add(new Coordinate(coordinates[i].x,coordinates[i].y));
                                     currentTimestamps.add(f.getTimestamps()[i]);
                                 }
@@ -128,7 +132,7 @@ public class RangeQueries {
                                     throw new Exception("Exception for the current list, it will be flushed and has only one element.");
                                 }
 
-                                if (currentCoordinates.size() != 0) {
+                                if (!currentCoordinates.isEmpty()) {
                                     trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                                     currentCoordinates.clear();
                                     currentTimestamps.clear();
@@ -140,7 +144,7 @@ public class RangeQueries {
                                 currentTimestamps.add(f.getTimestamps()[i+1]);
 
                             }else{
-                                if(currentCoordinates.size()!=0){
+                                if(!currentCoordinates.isEmpty()){
                                     throw new Exception("The current list has elements while it should not have.");
                                 }
 
@@ -158,14 +162,14 @@ public class RangeQueries {
                             throw new Exception("The array from the Liang Barsky should contain at least one element");
                         }
                     }else{
-                        if (currentCoordinates.size() > 0) {
+                        if (!currentCoordinates.isEmpty()) {
                             trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                             currentCoordinates.clear();
                             currentTimestamps.clear();
                         }
                     }
                 }
-                if (currentCoordinates.size() > 0) {
+                if (!currentCoordinates.isEmpty()) {
                     trajectoryList.add(new Trajectory(f.getObjectId(), segment, new GeometryFactory().createLineString(currentCoordinates.toArray(new Coordinate[0])), currentTimestamps.stream().mapToLong(l->l).toArray(),0,0,0,0,0,0 ));
                     currentCoordinates.clear();
                     currentTimestamps.clear();
@@ -207,7 +211,7 @@ public class RangeQueries {
                 }
 
                 //leftovers
-                if(currentMerged.size()>0){
+                if(!currentMerged.isEmpty()){
                     finalList.add(Tuple2.apply(null,new Trajectory(f._1,++segmentNum, currentMerged)));
                 }
                 return finalList.iterator();

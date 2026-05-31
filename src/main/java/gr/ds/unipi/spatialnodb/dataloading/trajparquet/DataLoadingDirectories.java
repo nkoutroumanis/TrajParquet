@@ -10,15 +10,12 @@ import java.io.File;
 import java.io.FileWriter;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.hadoop.MultipleParquetOutputsFormat;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.Bounds;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWriteSupport;
+import gr.ds.unipi.spatialnodb.messages.common.*;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.spark.HashPartitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -56,6 +53,11 @@ public class DataLoadingDirectories {
         final String dateFormat = dataLoading.getString("dateFormat");
         final String delimiter = dataLoading.getString("delimiter");
         final String metricsPathExport = dataLoading.getString("metricsPathExport");
+        final String indexType = dataLoading.getString("indexType");
+        final IndexUtils indexUtils;
+        if(!(indexType.equals("2D") || indexType.equals("3D"))) {
+            throw new IllegalArgumentException("The index parameter must be either 2D or 3D");
+        }
 
         Config hilbert = dataLoading.getConfig("hilbert");
 
@@ -68,7 +70,7 @@ public class DataLoadingDirectories {
 //        final double maxLat = hilbert.getDouble("maxLat");
 //        final long maxTime = hilbert.getLong("maxTime");
 
-        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
+        final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
 
         Job job = Job.getInstance();
@@ -119,6 +121,12 @@ public class DataLoadingDirectories {
         final double maxLat = bounds.getMaxLatitude()+0.0000001;
         final long maxTime = bounds.getMaxTimestamp()+1000;
 
+        if(indexType.equals("3D")) {
+            indexUtils = new IndexUtils3D(minLon, minLat, minTime, maxLon, maxLat, maxTime, maxOrdinates);
+        }else {
+            indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
+        }
+
         JavaPairRDD rdd = rdd1.flatMapToPair(f->{
 
             List<Tuple3<Double, Double, Long>> tuple = f._2;
@@ -134,13 +142,13 @@ public class DataLoadingDirectories {
 
             //initialize for the currentHilValue
             int part = 1;
-            long[] hil1 = HilbertUtil.scaleGeoTemporalPoint(tuple.get(0)._1(), minLon, maxLon, tuple.get(0)._2(), minLat, maxLat, tuple.get(0)._3(), minTime, maxTime, maxOrdinates);
+            long[] hil1 = indexUtils.scale(tuple.get(0)._1(), tuple.get(0)._2(), tuple.get(0)._3());//HilbertUtil.scaleGeoTemporalPoint(tuple.get(0)._1(), minLon, maxLon, tuple.get(0)._2(), minLat, maxLat, tuple.get(0)._3(), minTime, maxTime, maxOrdinates);
             Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil1, hil1, 0);
             long currentHilValue = ranges.toList().get(0).low();
             currentPart.add(new SpatioTemporalPoint(tuple.get(0)._1(), tuple.get(0)._2(),tuple.get(0)._3()));
 
             for (int i = 1; i < tuple.size(); i++) {
-                long[] hil2 = HilbertUtil.scaleGeoTemporalPoint(tuple.get(i)._1(), minLon, maxLon, tuple.get(i)._2(), minLat, maxLat, tuple.get(i)._3(), minTime, maxTime, maxOrdinates);
+                long[] hil2 = indexUtils.scale(tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3());//HilbertUtil.scaleGeoTemporalPoint(tuple.get(i)._1(), minLon, maxLon, tuple.get(i)._2(), minLat, maxLat, tuple.get(i)._3(), minTime, maxTime, maxOrdinates);
                 ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil2, hil2, 0);
                 long hilbertValue = ranges.toList().get(0).low();
 
@@ -159,16 +167,17 @@ public class DataLoadingDirectories {
                         for (Range range : rangesList) {
                             for (long cubeIndex = range.low(); cubeIndex<=range.high();cubeIndex++){
                                 long[] cube =  ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).point(cubeIndex);
+                                Optional<STPoint[]> stPoints = indexUtils.clipping(cube,tuple.get(i-1)._1(), tuple.get(i-1)._2(), tuple.get(i-1)._3(), tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3());
 
-                                double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
-                                double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
-                                long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
-
-                                double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
-                                double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
-                                long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
-
-                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(tuple.get(i-1)._1(), tuple.get(i-1)._2(), tuple.get(i-1)._3(), tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3(), xMin, yMin, tMin, xMax, yMax, tMax );
+//                                double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
+//                                double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
+//                                long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
+//
+//                                double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
+//                                double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
+//                                long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
+//
+//                                Optional<STPoint[]> stPoints = HilbertUtil.liangBarsky(tuple.get(i-1)._1(), tuple.get(i-1)._2(), tuple.get(i-1)._3(), tuple.get(i)._1(), tuple.get(i)._2(), tuple.get(i)._3(), xMin, yMin, tMin, xMax, yMax, tMax );
 
                                 List<Tuple3<Double, Double, Long>> newPoints = new ArrayList<>();
                                 if(stPoints.isPresent()){
@@ -363,21 +372,20 @@ public class DataLoadingDirectories {
 
             return trajectoryParts.iterator();
 
-        })
-                .repartitionAndSortWithinPartitions(new HashPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1+"/", null), f._2));
+        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getMinTimestamp()),t._2);}).repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1.getHilbertKey()+"/", null), f._2));
         rdd.saveAsNewAPIHadoopFile(writePath, Void.class, TrajectorySegment.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
 
         Config metadataFile = ConfigFactory.empty()
-                .withValue("grid3DHilbert.bits", ConfigValueFactory.fromAnyRef(bits))
-                .withValue("grid3DHilbert.boundaries.minLon", ConfigValueFactory.fromAnyRef(minLon))
-                .withValue("grid3DHilbert.boundaries.minLat", ConfigValueFactory.fromAnyRef(minLat))
-                .withValue("grid3DHilbert.boundaries.minTime", ConfigValueFactory.fromAnyRef(minTime))
-                .withValue("grid3DHilbert.boundaries.maxLon", ConfigValueFactory.fromAnyRef(maxLon))
-                .withValue("grid3DHilbert.boundaries.maxLat", ConfigValueFactory.fromAnyRef(maxLat))
-                .withValue("grid3DHilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime));
+                .withValue("gridHilbert.bits", ConfigValueFactory.fromAnyRef(bits))
+                .withValue("gridHilbert.boundaries.minLon", ConfigValueFactory.fromAnyRef(minLon))
+                .withValue("gridHilbert.boundaries.minLat", ConfigValueFactory.fromAnyRef(minLat))
+                .withValue("gridHilbert.boundaries.minTime", ConfigValueFactory.fromAnyRef(minTime))
+                .withValue("gridHilbert.boundaries.maxLon", ConfigValueFactory.fromAnyRef(maxLon))
+                .withValue("gridHilbert.boundaries.maxLat", ConfigValueFactory.fromAnyRef(maxLat))
+                .withValue("gridHilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime));
 
         String json = metadataFile.root().render(
                 ConfigRenderOptions.defaults()

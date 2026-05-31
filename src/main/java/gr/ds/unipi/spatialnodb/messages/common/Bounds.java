@@ -1,34 +1,12 @@
-package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
+package gr.ds.unipi.spatialnodb.messages.common;
 
 import java.io.Serializable;
 import java.util.List;
 
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import scala.Tuple3;
 
 public class Bounds implements Serializable {
-//    public void setMinLon(double minLon) {
-//        this.minLon = minLon;
-//    }
-//
-//    public void setMinLat(double minLat) {
-//        this.minLat = minLat;
-//    }
-//
-//    public void setMinTimestamp(long minTs) {
-//        this.minTs = minTs;
-//    }
-//
-//    public void setMaxLon(double maxLon) {
-//        this.maxLon = maxLon;
-//    }
-//
-//    public void setMaxLat(double maxLat) {
-//        this.maxLat = maxLat;
-//    }
-//
-//    public void setMaxTimestamp(long maxTs) {
-//        this.maxTs = maxTs;
-//    }
 
     private double minLon = Double.MAX_VALUE;
     private double minLat = Double.MAX_VALUE;

@@ -1,4 +1,4 @@
-package gr.ds.unipi.spatialnodb.messages.common.trajparquetnoda;
+package gr.ds.unipi.spatialnodb.messages.common;
 
 import java.io.Serializable;
 

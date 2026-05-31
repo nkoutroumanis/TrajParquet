@@ -4,10 +4,10 @@ package gr.ds.unipi.spatialnodb.messages.common.trajparquet;
 //import fi.iki.yak.ts.compression.gorilla.Decompressor;
 //import fi.iki.yak.ts.compression.gorilla.Value;
 //import gr.aueb.delorean.chimp.ChimpNDecompressor;
+import gr.ds.unipi.spatialnodb.messages.common.SpatialPoint;
 import org.apache.parquet.io.api.*;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<TrajectorySegmentWithMetadata> {
 
