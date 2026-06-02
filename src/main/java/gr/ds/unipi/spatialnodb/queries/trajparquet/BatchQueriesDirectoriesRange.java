@@ -21,6 +21,7 @@ import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
+import org.davidmoten.hilbert.Range;
 import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
@@ -37,7 +38,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class BatchQueriesDirectoriesRange {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -72,7 +73,7 @@ public class BatchQueriesDirectoriesRange {
 
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
-        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class, HilbertUtil.class});
+        SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class, SpatioTemporalPoint[].class, HilbertUtil.class});
         sparkConf.setAppName("Batch Range Querying in TrajParquet");
         if (!sparkConf.contains("spark.master")) {
             sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
@@ -118,27 +119,42 @@ public class BatchQueriesDirectoriesRange {
             final double queryMaxLatitude = Double.min(maxLat, tuple2._2._2.getY());
             final long queryMaxTimestamp = Long.min(maxTime-1000, tuple2._2._2.getT());
 
-            long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
             Ranges ranges = hilbertCurveBr.query(hilStart, hilEnd, 0);
 
             List<Tuple2<Long, Tuple2<Long,Tuple2<STPoint, STPoint> >>> cubes = new ArrayList<>();
 
-            ranges.toList().forEach(range -> {
+//            ranges.toList().forEach(range -> {
+//                for (long r = range.low(); r <= range.high(); r++) {
+//                    if(directoriesSet.contains(String.valueOf(r))) {
+//                        long[] arr = hilbertCurveBr.point(r);
+//                        if(arr[0] == hilStart[0] || arr[1] == hilStart[1] || arr[2] == hilStart[2]
+//                                || arr[0] == hilEnd[0] || arr[1] == hilEnd[1] || arr[2] == hilEnd[2]) {
+//                            cubes.add(Tuple2.apply(r,Tuple2.apply(tuple2._1,tuple2._2)));
+//                        }
+//                    }
+//                }
+//            });
+
+            for (Range range : ranges.toList()) {
                 for (long r = range.low(); r <= range.high(); r++) {
                     if(directoriesSet.contains(String.valueOf(r))) {
                         long[] arr = hilbertCurveBr.point(r);
-                        if(arr[0] == hilStart[0] || arr[1] == hilStart[1] || arr[2] == hilStart[2]
-                                || arr[0] == hilEnd[0] || arr[1] == hilEnd[1] || arr[2] == hilEnd[2]) {
-                            cubes.add(Tuple2.apply(r,Tuple2.apply(tuple2._1,tuple2._2)));
+                        for (int i = 0; i < arr.length; i++) {
+                            if(arr[i] == hilStart[i] || arr[i] == hilEnd[i]) {
+                                cubes.add(Tuple2.apply(r,Tuple2.apply(tuple2._1,tuple2._2)));
+                                break;
+                            }
                         }
                     }
                 }
-            });
+            }
+
             return cubes.iterator();
         };
 
-        PairFlatMapFunction<Tuple2<Long, Tuple2<STPoint, STPoint>>, Long, Long> queryToFullyContainedCubesFunction = tuple2 -> {
+        PairFlatMapFunction<Tuple2<Long, Tuple2<STPoint, STPoint>>, Long, Long> queryToFullyContainedCubesFunctionOnlyId = tuple2 -> {
 
             SmallHilbertCurve hilbertCurveBr = ((SmallHilbertCurve) br.getValue());
 
@@ -150,23 +166,69 @@ public class BatchQueriesDirectoriesRange {
             final double queryMaxLatitude = Double.min(maxLat, tuple2._2._2.getY());
             final long queryMaxTimestamp = Long.min(maxTime-1000, tuple2._2._2.getT());
 
-            long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
             Ranges ranges = hilbertCurveBr.query(hilStart, hilEnd, 0);
 
             List<Tuple2<Long, Long>> cubes = new ArrayList<>();
 
-            ranges.toList().forEach(range -> {
+            boolean flag = true;
+            for (Range range : ranges.toList()) {
                 for (long r = range.low(); r <= range.high(); r++) {
                     if(directoriesSet.contains(String.valueOf(r))) {
                         long[] arr = hilbertCurveBr.point(r);
-                        if (arr[0] != hilStart[0] && arr[1] != hilStart[1] && arr[2] != hilStart[2]
-                                && arr[0] != hilEnd[0] && arr[1] != hilEnd[1] && arr[2] != hilEnd[2]) {
+                        for (int i = 0; i < arr.length; i++) {
+                            if(arr[i] == hilStart[i] || arr[i] == hilEnd[i]) {
+                                flag = false;
+                                break;
+                            }
+                        }
+                        if(flag) {
                             cubes.add(Tuple2.apply(r, tuple2._1));
                         }
+                        flag = true;
                     }
                 }
-            });
+            }
+            return cubes.iterator();
+        };
+
+        PairFlatMapFunction<Tuple2<Long, Tuple2<STPoint, STPoint>>, Long, Tuple2<Long, Tuple2<STPoint, STPoint>>> queryToFullyContainedCubesFunction = tuple2 -> {
+
+            SmallHilbertCurve hilbertCurveBr = ((SmallHilbertCurve) br.getValue());
+
+            final double queryMinLongitude = Double.max(minLon, tuple2._2._1.getX());
+            final double queryMinLatitude = Double.max(minLat, tuple2._2._1.getY());
+            final long queryMinTimestamp = Long.max(minTime, tuple2._2._1.getT());
+
+            final double queryMaxLongitude = Double.min(maxLon, tuple2._2._2.getX());
+            final double queryMaxLatitude = Double.min(maxLat, tuple2._2._2.getY());
+            final long queryMaxTimestamp = Long.min(maxTime-1000, tuple2._2._2.getT());
+
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            Ranges ranges = hilbertCurveBr.query(hilStart, hilEnd, 0);
+
+            List<Tuple2<Long, Tuple2<Long, Tuple2<STPoint, STPoint>>>> cubes = new ArrayList<>();
+
+            boolean flag = true;
+            for (Range range : ranges.toList()) {
+                for (long r = range.low(); r <= range.high(); r++) {
+                    if(directoriesSet.contains(String.valueOf(r))) {
+                        long[] arr = hilbertCurveBr.point(r);
+                        for (int i = 0; i < arr.length; i++) {
+                            if(arr[i] == hilStart[i] || arr[i] == hilEnd[i]) {
+                                flag = false;
+                                break;
+                            }
+                        }
+                        if(flag) {
+                            cubes.add(Tuple2.apply(r, Tuple2.apply(tuple2._1, tuple2._2)));
+                        }
+                        flag = true;
+                    }
+                }
+            }
             return cubes.iterator();
         };
 
@@ -188,20 +250,20 @@ public class BatchQueriesDirectoriesRange {
                         if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp() &&
                                 stPoints.get()[1].getT() == spatioTemporalPoints[i+1].getTimestamp()){
 
-                            if(currentSpatioTemporalPoints.size()!=0){
+                            if(!currentSpatioTemporalPoints.isEmpty()){
                                 if(!currentSpatioTemporalPoints.get(currentSpatioTemporalPoints.size()-1).equals(spatioTemporalPoints[i])){
                                     throw new Exception("The i th element of the segment should be the last point of the current list.");
                                 }
                             }
 
-                            if (currentSpatioTemporalPoints.size() == 0) {
+                            if (currentSpatioTemporalPoints.isEmpty()) {
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                             }
                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i + 1].getLongitude(), spatioTemporalPoints[i + 1].getLatitude(), spatioTemporalPoints[i + 1].getTimestamp()));
 
                         }else if(stPoints.get()[0].getT() == spatioTemporalPoints[i].getTimestamp()){
 
-                            if (currentSpatioTemporalPoints.size() == 0) {
+                            if (currentSpatioTemporalPoints.isEmpty()) {
                                 currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(), spatioTemporalPoints[i].getTimestamp()));
                             }
                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[1].getX(), stPoints.get()[1].getY(), stPoints.get()[1].getT()));
@@ -213,14 +275,14 @@ public class BatchQueriesDirectoriesRange {
                                 throw new Exception("Exception for the current list, it will be flushed and has only one element.");
                             }
 
-                            if (currentSpatioTemporalPoints.size() != 0) {
+                            if (!currentSpatioTemporalPoints.isEmpty()) {
                                 trajectoryList.add(Tuple2.apply(Tuple2.apply(tuple2._2._2.getObjectId(), tuple2._2._1._1),new TrajectorySegment(tuple2._2._2.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0)));
                                 currentSpatioTemporalPoints.clear();
                             }
                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(spatioTemporalPoints[i+1].getLongitude(), spatioTemporalPoints[i+1].getLatitude(), spatioTemporalPoints[i+1].getTimestamp()));
                         }else{
-                            if(currentSpatioTemporalPoints.size()!=0){
+                            if(!currentSpatioTemporalPoints.isEmpty()){
                                 throw new Exception("The current list has elements while it should not have.");
                             }
                             currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoints.get()[0].getX(), stPoints.get()[0].getY(), stPoints.get()[0].getT()));
@@ -233,14 +295,14 @@ public class BatchQueriesDirectoriesRange {
                     }
 
                 }else{
-                    if (currentSpatioTemporalPoints.size() > 0) {
+                    if (!currentSpatioTemporalPoints.isEmpty()) {
                         trajectoryList.add(Tuple2.apply(Tuple2.apply(tuple2._2._2.getObjectId(), tuple2._2._1._1) ,new TrajectorySegment(tuple2._2._2.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0)));
                         currentSpatioTemporalPoints.clear();
                     }
                 }
 
             }
-            if (currentSpatioTemporalPoints.size() > 0) {
+            if (!currentSpatioTemporalPoints.isEmpty()) {
                 trajectoryList.add(Tuple2.apply(Tuple2.apply(tuple2._2._2.getObjectId(), tuple2._2._1._1) ,new TrajectorySegment(tuple2._2._2.getObjectId(), segment, currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]), 0, 0, 0, 0, 0, 0)));
                 currentSpatioTemporalPoints.clear();
             }
@@ -278,7 +340,7 @@ public class BatchQueriesDirectoriesRange {
             }
 
             //leftovers
-            if(currentMerged.size()>0){
+            if(!currentMerged.isEmpty()){
                 finalList.add(Tuple2.apply(tuple2._1._2,new TrajectorySegment(tuple2._1._1,++segmentNum, currentMerged)));
             }
             return finalList.iterator();
@@ -298,23 +360,81 @@ public class BatchQueriesDirectoriesRange {
             ungroupedResults = queriesIntersectedCubes.join(trajectoriesWithIntersectedCubes).<Tuple2<String, Long>, TrajectorySegment>flatMapToPair(refinementFunction);
         }
 
-//        System.out.println(intersectedCubes);
-//        System.out.println(intersectedCubes.size());
-//        resultsIntersected.collect().forEach(System.out::println);
-//        System.exit(1);
-
         sb.setLength(0);
-        JavaPairRDD<Long, Long> queriesFullyContainedCubes = rangeQueries.<Long, Long>flatMapToPair(queryToFullyContainedCubesFunction);
+        JavaPairRDD queriesFullyContainedCubes;
+        if(indexUtils instanceof IndexUtils2D){
+            //returns JavaPairRDD<Long, Tuple2<ST,ST>> -> first type represents the cell id, the second represents the query id and the two ST points.
+            queriesFullyContainedCubes = rangeQueries.<Long, Tuple2<Long, Tuple2<STPoint, STPoint>>>flatMapToPair(queryToFullyContainedCubesFunction);
+        }else{
+            //returns JavaPairRDD<Long,Long> -> first type represents the cell id, second the query id
+            queriesFullyContainedCubes = rangeQueries.<Long, Long>flatMapToPair(queryToFullyContainedCubesFunctionOnlyId);
+        }
+
         List<Long> fullyContainedCubes = queriesFullyContainedCubes.keys().distinct().collect();
-//        System.out.println(fullyContainedCubes.size() + " "+queriesFullyContainedCubes.count());
-//        System.out.println(fullyContainedCubes);
-//        System.exit(1);
 
         if(!fullyContainedCubes.isEmpty()){
             fullyContainedCubes.forEach(cube -> sb.append(parquetPath+File.separator+"stIndex").append(File.separator).append(cube).append(","));
             sb.deleteCharAt(sb.length()-1);
             JavaPairRDD<Long, TrajectorySegment> trajectoriesWithFullyIntersectedCubes = (JavaPairRDD<Long, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegment.class, job.getConfiguration());
-            JavaPairRDD<Tuple2<String, Long>, TrajectorySegment> resultsFullyContained = queriesFullyContainedCubes.join(trajectoriesWithFullyIntersectedCubes).<Tuple2<String, Long>, TrajectorySegment>mapToPair(t->{return Tuple2.apply(Tuple2.apply(t._2._2.getObjectId(), t._2._1), t._2._2);});
+
+            JavaPairRDD<Tuple2<String, Long>, TrajectorySegment> resultsFullyContained;
+            if(indexUtils instanceof IndexUtils2D){
+                resultsFullyContained = ((JavaPairRDD<Long, Tuple2<Long, Tuple2<STPoint, STPoint>>>)queriesFullyContainedCubes).join(trajectoriesWithFullyIntersectedCubes)
+                        .<Tuple2<String, Long>, TrajectorySegment>flatMapToPair(f->{
+
+                            List<Tuple2<Tuple2<String,Long>,TrajectorySegment>> trajectoryList = new ArrayList<>();
+                            List<SpatioTemporalPoint> currentSpatioTemporalPoints = new ArrayList<>();
+
+                            double minX = f._2._1._2._1.getX();
+                            double maxX = f._2._1._2._2.getX();
+
+                            double minY = f._2._1._2._1.getY();
+                            double maxY = f._2._1._2._2.getY();
+
+                            long minT = f._2._1._2._1.getT();
+                            long maxT = f._2._1._2._2.getT();
+
+
+                            SpatioTemporalPoint[] spatioTemporalPoints = f._2._2.getSpatioTemporalPoints();
+                            boolean previous = false;
+
+                            if(HilbertUtil.inTimeWindow(spatioTemporalPoints[0].getTimestamp(), minT, maxT)){
+                                currentSpatioTemporalPoints.add(spatioTemporalPoints[0]);
+                                previous = true;
+                            }
+
+                            for (int i = 1; i < spatioTemporalPoints.length; i++) {
+                                if(previous || HilbertUtil.timeIntervalsIntersect(spatioTemporalPoints[i-1].getTimestamp(),spatioTemporalPoints[i].getTimestamp(),minT,maxT)){
+                                    if(previous && HilbertUtil.inTimeWindow(spatioTemporalPoints[i].getTimestamp(), minT, maxT)){
+                                        currentSpatioTemporalPoints.add(spatioTemporalPoints[i]);
+                                    }else{
+                                        Optional<STPoint[]> stPoint = HilbertUtil.liangBarsky(spatioTemporalPoints[i-1].getLongitude(),spatioTemporalPoints[i-1].getLatitude(),spatioTemporalPoints[i-1].getTimestamp(), spatioTemporalPoints[i].getLongitude(),spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp(),minX, minY, minT, maxX, maxY, maxT);
+                                        if(previous){
+                                            currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[1].getX(), stPoint.get()[1].getY(), stPoint.get()[1].getT()));
+                                            break;
+                                        }else if (HilbertUtil.inTimeWindow(spatioTemporalPoints[i].getTimestamp(), minT, maxT)) {
+                                            currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[0].getX(), stPoint.get()[0].getY(), stPoint.get()[0].getT()));
+                                            currentSpatioTemporalPoints.add(spatioTemporalPoints[i]);
+                                            previous = true;
+                                        }else{
+                                            currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[0].getX(), stPoint.get()[0].getY(), stPoint.get()[0].getT()));
+                                            currentSpatioTemporalPoints.add(new SpatioTemporalPoint(stPoint.get()[1].getX(), stPoint.get()[1].getY(), stPoint.get()[1].getT()));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!currentSpatioTemporalPoints.isEmpty()) {
+                                trajectoryList.add(Tuple2.apply(Tuple2.apply(f._2._2.getObjectId(), f._2._1._1), new TrajectorySegment(f._2._2.getObjectId(), f._2._2.getSegment(),currentSpatioTemporalPoints.toArray(new SpatioTemporalPoint[0]),0,0,0,0,0,0)));
+                                currentSpatioTemporalPoints.clear();
+                            }
+
+                            return trajectoryList.iterator();
+                });
+            }else{
+                resultsFullyContained = ((JavaPairRDD<Long,Long>)queriesFullyContainedCubes).join(trajectoriesWithFullyIntersectedCubes).<Tuple2<String, Long>, TrajectorySegment>mapToPair(t->{return Tuple2.apply(Tuple2.apply(t._2._2.getObjectId(), t._2._1), t._2._2);});
+            }
 
             if(ungroupedResults!=null){
                 ungroupedResults = ungroupedResults.union(resultsFullyContained);
@@ -335,7 +455,6 @@ public class BatchQueriesDirectoriesRange {
 //                    t++;
 //                }
 //                System.out.println(longIterableTuple2._1+";"+t+";"+p);
-//
 //            }
         }
 

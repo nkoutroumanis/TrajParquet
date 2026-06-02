@@ -7,7 +7,10 @@ import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
 import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
 import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
 import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentPartialReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWithMetadata;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.pathReadParquet.ParquetInputFormatWithKey;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
@@ -22,23 +25,28 @@ import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
+import org.davidmoten.hilbert.Range;
 import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.doesTrajectoryIntersectWithCube;
 import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.isTrajectoryDistanceLessThanEpsilonToCube;
-import static org.apache.parquet.filter2.predicate.FilterApi.*;
+import static org.apache.parquet.filter2.predicate.FilterApi.binaryColumn;
+import static org.apache.parquet.filter2.predicate.FilterApi.in;
 
-public class BatchQueriesDirectoriesFrechet {
+public class BatchQueriesDirectoriesFrechet3D {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -154,7 +162,6 @@ public class BatchQueriesDirectoriesFrechet {
                         mbrMinTimestamp = tstp;
                     }
                 }
-
                 return new TrajectorySegment("", -1, trajectoryQuery, mbrMinLongitude, mbrMinLatitude, mbrMinTimestamp, mbrMaxLongitude, mbrMaxLatitude, mbrMaxTimestamp);            }
         };
 
@@ -169,41 +176,82 @@ public class BatchQueriesDirectoriesFrechet {
 
             final double queryMaxLongitude = Double.min(maxLon-0.0000001,tuple2._2.getMaxLongitude()+epsilon);
             final double queryMaxLatitude = Double.min(maxLat-0.0000001,tuple2._2.getMaxLatitude()+epsilon);
-            final long queryMaxTimestamp = minTime;//maxTime-1000;
+            final long queryMaxTimestamp = maxTime-1000;
 
-            long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
             Ranges ranges = hilbertCurveBr.query(hilStart, hilEnd, 0);
-            final HashSet<Long> initialCubes = new HashSet<>();
 
-            ranges.toList().forEach(range -> {
-                for (long r = range.low(); r <= range.high(); r++) {
-                    long[] cube = hilbertCurveBr.point(r);
-                    double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
-                    double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
-//                        long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
+            List<Tuple2<Long,Long>> trajectoryIdToCubes = new ArrayList<>();
 
-                    double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
-                    double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
-//                        long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
+            if(indexUtils instanceof IndexUtils2D){
+                for (Range range : ranges.toList()) {
+                    for (long r = range.low(); r <= range.high(); r++) {
+                        if(directoriesSet.contains(String.valueOf(r))) {
+                            long[] cube = hilbertCurveBr.point(r);
+                            double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
+                            double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
 
-                    if(doesTrajectoryIntersectWithCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax) || isTrajectoryDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)){
-                        initialCubes.add(r);
+                            double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
+                            double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
+
+                            if(doesTrajectoryIntersectWithCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax) || isTrajectoryDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)){
+                                trajectoryIdToCubes.add(Tuple2.apply(r,tuple2._1));
+                            }
+                        }
                     }
                 }
-            });
+            }else{
+                for (long i = hilStart[0]; i <= hilEnd[0]; i++) {
+                    for (long j = hilStart[1]; j <= hilEnd[1]; j++) {
+                            double xMin = minLon + (i * (maxLon - minLon) / (maxOrdinates + 1L));
+                            double yMin = minLat + (j * (maxLat - minLat) / (maxOrdinates + 1L));
 
-            List<Tuple2<Long,Long>> trajectoryIdToCubes = new ArrayList<>(initialCubes.size());
-            for (Long cubeId : initialCubes) {
-                long[] cube = hilbertCurveBr.point(cubeId);
-                for (long i = 0; i <= maxOrdinates; i++) {
-                    long c = hilbertCurveBr.index(cube[0], cube[1], i);
-                    String j = String.valueOf(c);
-                    if(directoriesSet.contains(j)) {
-                        trajectoryIdToCubes.add(Tuple2.apply(c,tuple2._1));
+                            double xMax = minLon + ((i + 1) * (maxLon - minLon) / (maxOrdinates + 1L));
+                            double yMax = minLat + ((j + 1) * (maxLat - minLat) / (maxOrdinates + 1L));
+
+                            if(doesTrajectoryIntersectWithCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax) || isTrajectoryDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)) {
+                                for (long k = hilStart[2]; k <= hilEnd[2]; k++) {
+                                    long cubeId = hilbertCurveBr.index(i,j,k);
+                                    if(directoriesSet.contains(String.valueOf(cubeId))) {
+                                        trajectoryIdToCubes.add(Tuple2.apply(cubeId,tuple2._1));
+                                    }
+                                }
+                            }
                     }
                 }
             }
+
+//            final HashSet<Long> initialCubes = new HashSet<>();
+//
+//            ranges.toList().forEach(range -> {
+//                for (long r = range.low(); r <= range.high(); r++) {
+//                    long[] cube = hilbertCurveBr.point(r);
+//                    double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
+//                    double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
+////                        long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
+//
+//                    double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
+//                    double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
+////                        long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
+//
+//                    if(doesTrajectoryIntersectWithCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax) || isTrajectoryDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)){
+//                        initialCubes.add(r);
+//                    }
+//                }
+//            });
+//
+//            List<Tuple2<Long,Long>> trajectoryIdToCubes = new ArrayList<>(initialCubes.size());
+//            for (Long cubeId : initialCubes) {
+//                long[] cube = hilbertCurveBr.point(cubeId);
+//                for (long i = 0; i <= maxOrdinates; i++) {
+//                    long c = hilbertCurveBr.index(cube[0], cube[1], i);
+//                    String j = String.valueOf(c);
+//                    if(directoriesSet.contains(j)) {
+//                        trajectoryIdToCubes.add(Tuple2.apply(c,tuple2._1));
+//                    }
+//                }
+//            }
             return trajectoryIdToCubes.iterator();
         };
 
@@ -213,7 +261,6 @@ public class BatchQueriesDirectoriesFrechet {
 
 
         List<Long> cubes = cubeToQueryId.keys().distinct().collect();
-//        System.exit(1);
         StringBuilder sb = new StringBuilder();
         cubes.forEach(cube -> sb.append(parquetPath+File.separator+"stIndex").append(File.separator).append(cube).append(","));
         sb.deleteCharAt(sb.length()-1);
@@ -272,7 +319,7 @@ public class BatchQueriesDirectoriesFrechet {
 
         System.out.println(results.count());
         results.collect().forEach(i->{
-            System.out.println(i._1+" "+i._2._2.getObjectId());
+            System.out.println(i._1+" - "+i._2._2.getObjectId());
         });
         long endTime = System.currentTimeMillis();
 

@@ -11,12 +11,14 @@ import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
+import org.davidmoten.hilbert.Range;
 import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 import scala.Tuple2;
@@ -26,8 +28,9 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
+import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
-public class QueriesDirectoriesFrechet {
+public class Frechet2DQueriesDirectories {
     public static void main(String args[]) throws IOException {
 
         Config config = loadConfig("queries.conf");
@@ -62,9 +65,11 @@ public class QueriesDirectoriesFrechet {
             indexUtils = new IndexUtils2D(minLon, minLat, maxLon, maxLat, maxOrdinates);
         }
 
-        Job job = Job.getInstance();
+        Job jobIntersected = Job.getInstance();
+        Job jobFullyContains = Job.getInstance();
 
-        ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
+        ParquetInputFormat.setReadSupportClass(jobIntersected, TrajectorySegmentReadSupport.class);
+        ParquetInputFormat.setReadSupportClass(jobFullyContains, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
         sparkConf.setAppName("Similarity Querying in TrajParquet");
@@ -147,37 +152,41 @@ public class QueriesDirectoriesFrechet {
 
             final double queryMinLongitude = Double.max(minLon,mbrMinLongitude-epsilon);
             final double queryMinLatitude = Double.max(minLat,mbrMinLatitude-epsilon);
-            final long queryMinTimestamp = minTime;
 
             final double queryMaxLongitude = Double.min(maxLon-0.0000001,mbrMaxLongitude+epsilon);
             final double queryMaxLatitude = Double.min(maxLat-0.0000001,mbrMaxLatitude+epsilon);
-            final long queryMaxTimestamp = maxTime-1000;
 
-//            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
-//            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
-//            FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
+            FilterPredicate xAxis = and(gtEq(doubleColumn("maxLongitude"), queryMinLongitude), ltEq(doubleColumn("minLongitude"), queryMaxLongitude));
+            FilterPredicate yAxis = and(gtEq(doubleColumn("maxLatitude"), queryMinLatitude), ltEq(doubleColumn("minLatitude"), queryMaxLatitude));
 
-//            ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
+            ParquetInputFormat.setFilterPredicate(jobIntersected.getConfiguration(), and(xAxis, yAxis));
 
-            long[] hilStart = HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, minTime);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, maxTime-1000);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
             Ranges ranges = hilbertCurve.query(hilStart, hilEnd, 0);
             StringBuilder sbFullyCovers = new StringBuilder();
             StringBuilder sbIntersected = new StringBuilder();
 
-            ranges.toList().forEach(range -> {
+            boolean flag = false;
+            for (Range range : ranges.toList()) {
                 for (long r = range.low(); r <= range.high(); r++) {
                     if(directoriesSet.contains(String.valueOf(r))) {
                         long[] arr = hilbertCurve.point(r);
-                        if (arr[0] == hilStart[0] || arr[1] == hilStart[1] || arr[2] == hilStart[2]
-                                || arr[0] == hilEnd[0] || arr[1] == hilEnd[1] || arr[2] == hilEnd[2]) {
-                            sbIntersected.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
-                        }else{
-                            sbFullyCovers.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
+                        for (int i = 0; i < arr.length; i++) {
+                            if(arr[i] == hilStart[i] || arr[i] == hilEnd[i]) {
+                                flag = true;
+                                break;
+                            }
                         }
+                        if(flag) {
+                            sbIntersected.append(parquetPath+ File.separator+"stIndex"+File.separator+r+",");
+                        }else{
+                            sbFullyCovers.append(parquetPath+ File.separator+"stIndex"+File.separator+r+",");
+                        }
+                        flag = false;
                     }
                 }
-            });
+            }
 
             if(sbIntersected.length()==0 && sbFullyCovers.length()==0){
                 bw.write(0+";"+0+";"+0+";"+0);
@@ -194,13 +203,13 @@ public class QueriesDirectoriesFrechet {
 
             long startTime = System.currentTimeMillis();
 
-            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
+            JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobIntersected.getConfiguration());
 
             JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDD
                     .filter(f -> {
                         SpatioTemporalPoint[] spatioTemporalPoints = f._2.getSpatioTemporalPoints();
                         for (int i = 0; i < spatioTemporalPoints.length; i++) {
-                            if(!HilbertUtil.inBox(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(),spatioTemporalPoints[i].getTimestamp(),queryMinLongitude, queryMinLatitude, queryMinTimestamp, queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp)) {
+                            if(!HilbertUtil.pointInRectangle(spatioTemporalPoints[i].getLongitude(), spatioTemporalPoints[i].getLatitude(),queryMinLongitude, queryMinLatitude, queryMaxLongitude, queryMaxLatitude)) {
                                 return false;
                             }
                         }
@@ -214,7 +223,9 @@ public class QueriesDirectoriesFrechet {
                     });
 
             if(sbFullyCovers.length()!=0){
-                pairRDDRangeQuery = pairRDDRangeQuery.union(((JavaPairRDD<Void, TrajectorySegment>)jsc.newAPIHadoopFile(sbFullyCovers.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration())).filter(f-> ! ((f._2.getSpatioTemporalPoints().length>2 || !(f._2.getSegment()>1)) &&  HilbertUtil.isMinDistGreaterThan(f._2.getMinLongitude(), f._2.getMinLatitude(), f._2.getMaxLongitude(), f._2.getMaxLatitude(), trajectoryQuery, epsilon))));
+                JavaPairRDD<Void, TrajectorySegment> fullyContainedPairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbFullyCovers.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobFullyContains.getConfiguration());
+                fullyContainedPairRDD = fullyContainedPairRDD.filter(f-> ! ((f._2.getSpatioTemporalPoints().length>2 || !(f._2.getSegment()>1)) &&  HilbertUtil.isMinDistGreaterThan(f._2.getMinLongitude(), f._2.getMinLatitude(), f._2.getMaxLongitude(), f._2.getMaxLatitude(), trajectoryQuery, epsilon)));
+                pairRDDRangeQuery = pairRDDRangeQuery.union(fullyContainedPairRDD);
             }
 
             pairRDDRangeQuery = pairRDDRangeQuery.groupBy(f->f._2.getObjectId())
@@ -277,7 +288,7 @@ public class QueriesDirectoriesFrechet {
             for (Tuple2<Void, TrajectorySegment> voidTrajectoryTuple2 : trajs) {
                 numOfPoints = numOfPoints + voidTrajectoryTuple2._2.getSpatioTemporalPoints().length;
             }
-//            System.out.println("Query is "+ Arrays.toString(trajectoryQuery));
+
             long endTime = System.currentTimeMillis();
             times.add((endTime - startTime));
             pages.add(DataPage.counter);
