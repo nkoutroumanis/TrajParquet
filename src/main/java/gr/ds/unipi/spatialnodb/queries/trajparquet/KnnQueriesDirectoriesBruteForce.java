@@ -23,7 +23,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class KnnQueriesDirectoriesBruteForce {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -52,7 +52,7 @@ public class KnnQueriesDirectoriesBruteForce {
         SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});
         sparkConf.setAppName("Knn Querying (Brute force) in TrajParquet");
         if (!sparkConf.contains("spark.master")) {
-            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
+            sparkConf.setMaster("local[*]").set("spark.executor.memory","4g") .set("spark.kryoserializer.buffer.max", "1g");
         }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());

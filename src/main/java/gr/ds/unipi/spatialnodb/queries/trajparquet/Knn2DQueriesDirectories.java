@@ -15,6 +15,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.davidmoten.hilbert.HilbertCurve;
+import org.davidmoten.hilbert.Range;
 import org.davidmoten.hilbert.Ranges;
 import org.davidmoten.hilbert.SmallHilbertCurve;
 
@@ -26,10 +27,10 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.doesTrajectoryIntersectWithCube;
 import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
-public class KnnQueriesDirectories {
+public class Knn2DQueriesDirectories {
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("src/main/resources/queries.conf");
+        Config config = loadConfig("queries.conf");
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -149,43 +150,56 @@ public class KnnQueriesDirectories {
 
             final double queryMinLongitude = Double.max(minLon,mbrMinLongitude);
             final double queryMinLatitude = Double.max(minLat,mbrMinLatitude);
-            final long queryMinTimestamp = minTime;
+//            final long queryMinTimestamp = minTime;
 
             final double queryMaxLongitude = Double.min(maxLon-0.0000001,mbrMaxLongitude);
             final double queryMaxLatitude = Double.min(maxLat-0.0000001,mbrMaxLatitude);
-            final long queryMaxTimestamp = minTime;//maxTime-1000;
+//            final long queryMaxTimestamp = maxTime-1000;
 
             long startTime = System.currentTimeMillis();
 
-            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, minTime);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, maxTime-1000);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
             Ranges ranges = hilbertCurve.query(hilStart, hilEnd, 0);
             final HashSet<Long> initialCubes = new HashSet<>();
 
-            ranges.toList().forEach(range -> {
-                for (long r = range.low(); r <= range.high(); r++) {
-                        long[] cube = hilbertCurve.point(r);
-                        double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
-                        double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
-//                        long tMin = minTime + (cube[2] * (maxTime-minTime)/(maxOrdinates+ 1L));
-
-                        double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
-                        double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
-//                        long tMax = minTime + ((cube[2]+1) * (maxTime-minTime)/(maxOrdinates+ 1L));
-
-                        if(doesTrajectoryIntersectWithCube(trajectoryQuery, xMin, yMin, xMax, yMax)){
-                            initialCubes.add(r);
-                        }
-                }
-            });
-
             StringBuilder sb = new StringBuilder();
-            for (Long cubeId : initialCubes) {
-                long[] cube = hilbertCurve.point(cubeId);
-                for (long i = 0; i <= maxOrdinates; i++) {//TIME NEEDED
-                    String j = String.valueOf(hilbertCurve.index(cube[0], cube[1], i));
-                    if(directoriesSet.contains(j)) {
-                        sb.append(parquetPath+File.separator+"stIndex"+File.separator+j+",");
+            if(indexUtils instanceof IndexUtils2D){
+                for (Range range : ranges.toList()) {
+                    for (long r = range.low(); r <= range.high(); r++) {
+                        if(directoriesSet.contains(String.valueOf(r))) {
+                            long[] cube = hilbertCurve.point(r);
+                            double xMin = minLon + (cube[0] * (maxLon-minLon)/(maxOrdinates+ 1L));
+                            double yMin = minLat + (cube[1] * (maxLat-minLat)/(maxOrdinates+ 1L));
+
+                            double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
+                            double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
+
+                            if(doesTrajectoryIntersectWithCube(trajectoryQuery, xMin, yMin, xMax, yMax)){
+                                sb.append(parquetPath+File.separator+"stIndex"+File.separator+r+",");
+                                initialCubes.add(r);
+                            }
+                        }
+                    }
+                }
+            }else{
+                for (long i = hilStart[0]; i <= hilEnd[0]; i++) {
+                    for (long j = hilStart[1]; j <= hilEnd[1]; j++) {
+                        double xMin = minLon + (i * (maxLon - minLon) / (maxOrdinates + 1L));
+                        double yMin = minLat + (j * (maxLat - minLat) / (maxOrdinates + 1L));
+
+                        double xMax = minLon + ((i + 1) * (maxLon - minLon) / (maxOrdinates + 1L));
+                        double yMax = minLat + ((j + 1) * (maxLat - minLat) / (maxOrdinates + 1L));
+
+                        if(doesTrajectoryIntersectWithCube(trajectoryQuery, xMin, yMin, xMax, yMax)) {
+                            for (long t = hilStart[2]; t <= hilEnd[2]; t++) {
+                                long cubeId = hilbertCurve.index(i,j,t);
+                                if(directoriesSet.contains(String.valueOf(cubeId))) {
+                                    sb.append(parquetPath+File.separator+"stIndex"+File.separator+cubeId+",");
+                                }
+                            }
+                            initialCubes.add(hilbertCurve.index(i,j,0));
+                        }
                     }
                 }
             }
@@ -218,19 +232,35 @@ public class KnnQueriesDirectories {
             PriorityQueue<CellScore> queueCells = new PriorityQueue<>(Comparator.comparingDouble(CellScore::getScore));
 
             HashSet<Long> temp = new HashSet<>();
-            visitedCubes.forEach(c-> {
-                long[] cube = hilbertCurve.point(c);
-                for (long i = Math.max(0, cube[0]-1); i <= Math.min(maxOrdinates, cube[0]+1); i++) {
-                    for (long j = Math.max(0, cube[1]-1); j <= Math.min(maxOrdinates, cube[1]+1); j++) {
-                        long cId = hilbertCurve.index(i,j,0);
-                        if(!visitedCubes.contains(cId) && !temp.contains(cId)){
-                            long[] cubeNeighbor = hilbertCurve.point(cId);
-                            temp.add(cId);
-                            queueCells.add(CellScore.newCellScore(cId, HilbertUtil.trajectoryMinDist(minLon + (cubeNeighbor[0] * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + (cubeNeighbor[1] * (maxLat-minLat)/(maxOrdinates+ 1L)),minLon + ((cubeNeighbor[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + ((cubeNeighbor[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L)),trajectoryQuery)));
+            if(indexUtils instanceof IndexUtils2D){
+                visitedCubes.forEach(c-> {
+                    long[] cube = hilbertCurve.point(c);
+                    for (long i = Math.max(0, cube[0]-1); i <= Math.min(maxOrdinates, cube[0]+1); i++) {
+                        for (long j = Math.max(0, cube[1]-1); j <= Math.min(maxOrdinates, cube[1]+1); j++) {
+                            long cId = hilbertCurve.index(i,j);
+                            if(!visitedCubes.contains(cId) && !temp.contains(cId)){
+                                long[] cubeNeighbor = hilbertCurve.point(cId);
+                                temp.add(cId);
+                                queueCells.add(CellScore.newCellScore(cId, HilbertUtil.trajectoryMinDist(minLon + (cubeNeighbor[0] * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + (cubeNeighbor[1] * (maxLat-minLat)/(maxOrdinates+ 1L)),minLon + ((cubeNeighbor[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + ((cubeNeighbor[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L)),trajectoryQuery)));
+                            }
                         }
                     }
-                }
-            });
+                });
+            }else{
+                visitedCubes.forEach(c-> {
+                    long[] cube = hilbertCurve.point(c);
+                    for (long i = Math.max(0, cube[0]-1); i <= Math.min(maxOrdinates, cube[0]+1); i++) {
+                        for (long j = Math.max(0, cube[1]-1); j <= Math.min(maxOrdinates, cube[1]+1); j++) {
+                            long cId = hilbertCurve.index(i,j,0);
+                            if(!visitedCubes.contains(cId) && !temp.contains(cId)){
+                                long[] cubeNeighbor = hilbertCurve.point(cId);
+                                temp.add(cId);
+                                queueCells.add(CellScore.newCellScore(cId, HilbertUtil.trajectoryMinDist(minLon + (cubeNeighbor[0] * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + (cubeNeighbor[1] * (maxLat-minLat)/(maxOrdinates+ 1L)),minLon + ((cubeNeighbor[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + ((cubeNeighbor[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L)),trajectoryQuery)));
+                            }
+                        }
+                    }
+                });
+            }
 
             if(flushedTrajectories.size()>=k || queueCells.isEmpty()) {
 
@@ -291,24 +321,41 @@ public class KnnQueriesDirectories {
                 long cell = queueCells.poll().getCellId();
                 visitedCubes.add(cell);
 
-                long[] cube = hilbertCurve.point(cell);
-                for (long i = Math.max(0, cube[0]-1); i <= Math.min(maxOrdinates, cube[0]+1); i++) {
-                    for (long j = Math.max(0, cube[1]-1); j <= Math.min(maxOrdinates, cube[1]+1); j++) {
-                        long cId = hilbertCurve.index(i,j,0);
-                        if(!visitedCubes.contains(cId) && !temp.contains(cId)){
-                            long[] cubeNeighbor = hilbertCurve.point(cId);
-                            temp.add(cId);
-                            queueCells.add(CellScore.newCellScore(cId, HilbertUtil.trajectoryMinDist(minLon + (cubeNeighbor[0] * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + (cubeNeighbor[1] * (maxLat-minLat)/(maxOrdinates+ 1L)),minLon + ((cubeNeighbor[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + ((cubeNeighbor[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L)),trajectoryQuery)));
-                        }
-                    }
-                }
-
                 sb.setLength(0);
 
-                for (long i = 0; i <= maxOrdinates; i++) {//TIME NEEDED
-                    String j = String.valueOf(hilbertCurve.index(cube[0], cube[1], i));
+                if(indexUtils instanceof IndexUtils2D){
+                    long[] cube = hilbertCurve.point(cell);
+                    for (long i = Math.max(0, cube[0]-1); i <= Math.min(maxOrdinates, cube[0]+1); i++) {
+                        for (long j = Math.max(0, cube[1]-1); j <= Math.min(maxOrdinates, cube[1]+1); j++) {
+                            long cId = hilbertCurve.index(i,j);
+                            if(!visitedCubes.contains(cId) && !temp.contains(cId)){
+                                long[] cubeNeighbor = hilbertCurve.point(cId);
+                                temp.add(cId);
+                                queueCells.add(CellScore.newCellScore(cId, HilbertUtil.trajectoryMinDist(minLon + (cubeNeighbor[0] * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + (cubeNeighbor[1] * (maxLat-minLat)/(maxOrdinates+ 1L)),minLon + ((cubeNeighbor[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + ((cubeNeighbor[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L)),trajectoryQuery)));
+                            }
+                        }
+                    }
+                    String j = String.valueOf(hilbertCurve.index(cube[0], cube[1]));
                     if(directoriesSet.contains(j)) {
                         sb.append(parquetPath+File.separator+"stIndex"+File.separator+j+"/,");
+                    }
+                }else{
+                    long[] cube = hilbertCurve.point(cell);
+                    for (long i = Math.max(0, cube[0]-1); i <= Math.min(maxOrdinates, cube[0]+1); i++) {
+                        for (long j = Math.max(0, cube[1]-1); j <= Math.min(maxOrdinates, cube[1]+1); j++) {
+                            long cId = hilbertCurve.index(i,j,0);
+                            if(!visitedCubes.contains(cId) && !temp.contains(cId)){
+                                long[] cubeNeighbor = hilbertCurve.point(cId);
+                                temp.add(cId);
+                                queueCells.add(CellScore.newCellScore(cId, HilbertUtil.trajectoryMinDist(minLon + (cubeNeighbor[0] * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + (cubeNeighbor[1] * (maxLat-minLat)/(maxOrdinates+ 1L)),minLon + ((cubeNeighbor[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L)),minLat + ((cubeNeighbor[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L)),trajectoryQuery)));
+                            }
+                        }
+                    }
+                    for (long i = hilStart[2]; i <= hilEnd[2]; i++) {//TIME NEEDED
+                        String j = String.valueOf(hilbertCurve.index(cube[0], cube[1], i));
+                        if(directoriesSet.contains(j)) {
+                            sb.append(parquetPath+File.separator+"stIndex"+File.separator+j+"/,");
+                        }
                     }
                 }
 
