@@ -41,7 +41,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 public class DataLoadingDirectories {
     public static void main(String[] args) throws IOException {
 
-        Config config = loadConfig("src/main/resources/data-loading.conf");
+        Config config = loadConfig("data-loading.conf");
 
         Config dataLoading = config.getConfig("data-loading");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -62,13 +62,6 @@ public class DataLoadingDirectories {
         Config hilbert = dataLoading.getConfig("hilbert");
 
         final int bits = hilbert.getInt("bits");
-
-//        final double minLon = hilbert.getDouble("minLon");
-//        final double minLat = hilbert.getDouble("minLat");
-//        final long minTime = hilbert.getLong("minTime");
-//        final double maxLon = hilbert.getDouble("maxLon");
-//        final double maxLat = hilbert.getDouble("maxLat");
-//        final long maxTime = hilbert.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(indexType.equals("3D")?3:2);
         final long maxOrdinates = hilbertCurve.maxOrdinate();

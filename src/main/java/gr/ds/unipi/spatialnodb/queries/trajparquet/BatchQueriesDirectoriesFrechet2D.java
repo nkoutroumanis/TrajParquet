@@ -314,7 +314,7 @@ public class BatchQueriesDirectoriesFrechet2D {
         });
         long endTime = System.currentTimeMillis();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-frechet-queries-batch-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-batch-frechet-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
         bw.write("Total Time (ms)\tTotal Pages\n");
         bw.write((endTime-startTime) + "\t"+ DataPage.counter);
         bw.close();

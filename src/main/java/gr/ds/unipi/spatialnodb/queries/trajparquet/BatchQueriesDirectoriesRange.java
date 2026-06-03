@@ -460,7 +460,7 @@ public class BatchQueriesDirectoriesRange {
 
         long endTime = System.currentTimeMillis();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-batch-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-batch-range-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
         bw.write("Total Time (ms)\tTotal Pages\n");
         bw.write((endTime-startTime) + "\t"+ DataPage.counter);
         bw.close();

@@ -51,7 +51,7 @@ public class RangeQueries {
         List<Long> times = new ArrayList<>();
         List<Integer> pages = new ArrayList<>();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"range-queries-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"range-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
@@ -217,7 +217,8 @@ public class RangeQueries {
             times.remove(0);
             pages.remove(0);
         }
-        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-trajparquet-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+"-"+Paths.get(parquetPath).getFileName().toString()+".txt"));
+
+        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
         bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\n");
         bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
         bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
