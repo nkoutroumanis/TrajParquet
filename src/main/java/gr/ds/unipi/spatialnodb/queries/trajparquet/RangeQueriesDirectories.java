@@ -90,6 +90,8 @@ public class RangeQueriesDirectories {
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
+
             String[] queryParts = query.split(";");
             double queryMinLongitude = Double.parseDouble(queryParts[0]);
             double queryMinLatitude = Double.parseDouble(queryParts[1]);
@@ -117,14 +119,12 @@ public class RangeQueriesDirectories {
                 }
             });
             if(sb.length()==0){
-                bw.write(0+";"+0+";"+0+";"+0);
+                bw.write((System.currentTimeMillis()-startTime)+";"+0+";"+0+";"+DataPage.counter);
                 DataPage.counter = 0;
                 bw.newLine();
                 continue;
             }
             sb.deleteCharAt(sb.length()-1);
-
-            long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString()/*parquetPath*/, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
 

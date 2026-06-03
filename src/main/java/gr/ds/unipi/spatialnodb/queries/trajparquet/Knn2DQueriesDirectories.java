@@ -90,6 +90,7 @@ public class Knn2DQueriesDirectories {
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
 
             int pointsCount = countPoints(query);
             SpatioTemporalPoint[] trajectoryQuery = new SpatioTemporalPoint[pointsCount];
@@ -155,8 +156,6 @@ public class Knn2DQueriesDirectories {
             final double queryMaxLongitude = Double.min(maxLon-0.0000001,mbrMaxLongitude);
             final double queryMaxLatitude = Double.min(maxLat-0.0000001,mbrMaxLatitude);
 //            final long queryMaxTimestamp = maxTime-1000;
-
-            long startTime = System.currentTimeMillis();
 
             long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, minTime);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
             long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, maxTime-1000);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);

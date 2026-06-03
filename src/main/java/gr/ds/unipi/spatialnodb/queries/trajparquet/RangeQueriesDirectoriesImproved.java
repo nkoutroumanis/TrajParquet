@@ -92,6 +92,8 @@ public class RangeQueriesDirectoriesImproved {
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
+
             String[] queryParts = query.split(";");
             double queryMinLongitude = Double.parseDouble(queryParts[0]);
             double queryMinLatitude = Double.parseDouble(queryParts[1]);
@@ -138,7 +140,7 @@ public class RangeQueriesDirectoriesImproved {
             }
 
             if(sbIntersected.length()==0 && sbFullyCovers.length()==0){
-                bw.write(0+";"+0+";"+0+";"+0);
+                bw.write((System.currentTimeMillis()-startTime)+";"+0+";"+0+";"+DataPage.counter);
                 DataPage.counter = 0;
                 bw.newLine();
                 continue;
@@ -148,8 +150,6 @@ public class RangeQueriesDirectoriesImproved {
                 sbFullyCovers.deleteCharAt(sbFullyCovers.length()-1);
             }
             sbIntersected.deleteCharAt(sbIntersected.length()-1);
-
-            long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobIntersected.getConfiguration());
 

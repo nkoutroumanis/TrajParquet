@@ -90,6 +90,7 @@ public class Knn3DQueriesDirectories {
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
 
             int pointsCount = countPoints(query);
             SpatioTemporalPoint[] trajectoryQuery = new SpatioTemporalPoint[pointsCount];
@@ -157,7 +158,6 @@ public class Knn3DQueriesDirectories {
             final long queryMaxTimestamp = maxTime-1000;
 
             FilterPredicate tAxis = and(gtEq(longColumn("minTimestamp"), queryMinTimestamp), ltEq(longColumn("maxTimestamp"), queryMaxTimestamp));
-            long startTime = System.currentTimeMillis();
 
             long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
             long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);

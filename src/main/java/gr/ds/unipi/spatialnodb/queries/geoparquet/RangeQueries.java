@@ -58,6 +58,8 @@ public class RangeQueries {
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
+
             String[] queryParts = query.split(";");
             double queryMinLongitude = Double.parseDouble(queryParts[0]);
             double queryMinLatitude = Double.parseDouble(queryParts[1]);
@@ -72,7 +74,6 @@ public class RangeQueries {
             FilterPredicate tAxis= and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
             ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
-            long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, Trajectory> pairRDD = (JavaPairRDD<Void, Trajectory>) jsc.newAPIHadoopFile(parquetPath,ParquetInputFormat.class, Void.class, Trajectory.class,job.getConfiguration());
 //            JavaPairRDD<Void,Trajectory> pairRDDRangeQuery = pairRDD;

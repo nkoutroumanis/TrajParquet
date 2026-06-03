@@ -92,6 +92,7 @@ public class Frechet3DQueriesDirectories {
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
 
             int pointsCount = countPoints(query);
             SpatioTemporalPoint[] trajectoryQuery = new SpatioTemporalPoint[pointsCount];
@@ -192,7 +193,7 @@ public class Frechet3DQueriesDirectories {
             }
 
             if(sbIntersected.length()==0 && sbFullyCovers.length()==0){
-                bw.write(0+";"+0+";"+0+";"+0);
+                bw.write((System.currentTimeMillis()-startTime)+";"+0+";"+0+";"+DataPage.counter);
                 DataPage.counter = 0;
                 bw.newLine();
                 continue;
@@ -203,8 +204,6 @@ public class Frechet3DQueriesDirectories {
                 sbFullyCovers.deleteCharAt(sbFullyCovers.length()-1);
             }
             sbIntersected.deleteCharAt(sbIntersected.length()-1);
-
-            long startTime = System.currentTimeMillis();
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(sbIntersected.toString(), ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobIntersected.getConfiguration());
 
