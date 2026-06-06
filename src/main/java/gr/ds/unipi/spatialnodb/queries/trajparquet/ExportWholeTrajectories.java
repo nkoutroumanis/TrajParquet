@@ -20,7 +20,7 @@ import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
 
 public class ExportWholeTrajectories {
     public static void main(String[] args) {
-        Config config = loadConfig("src/main/resources/export-trajectories.conf");
+        Config config = loadConfig("export-trajectories.conf");
 
         Config dataLoading = config.getConfig("export-trajectories");
         final String rawDataPath = dataLoading.getString("rawDataPath");
@@ -61,7 +61,7 @@ public class ExportWholeTrajectories {
             tuple.sort(comp);
 
             return tuple;
-        }).takeSample(false, n);
+        }).filter(f->f.size()<=200).takeSample(false, n);
 
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(writePath))) {

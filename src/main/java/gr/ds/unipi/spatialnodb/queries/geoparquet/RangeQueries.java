@@ -247,5 +247,7 @@ public class RangeQueries {
         bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
         bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
         bw.close();
+
+        sparkSession.close();
     }
 }

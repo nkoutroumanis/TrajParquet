@@ -357,6 +357,7 @@ public class RangeQueriesDirectoriesImproved {
         bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
         bw.close();
 
+        sparkSession.close();
     }
     //                jobIntersected.getConfiguration().unset("parquet.private.read.filter.predicate");
 //                jobIntersected.getConfiguration().iterator().forEachRemaining(e -> {

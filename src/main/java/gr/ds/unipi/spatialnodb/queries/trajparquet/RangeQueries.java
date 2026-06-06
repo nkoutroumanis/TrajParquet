@@ -224,6 +224,6 @@ public class RangeQueries {
         bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
         bw.close();
 
-
+        sparkSession.close();
     }
 }

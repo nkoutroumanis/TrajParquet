@@ -39,6 +39,7 @@ public class BatchQueriesDirectoriesRange {
     public static void main(String args[]) throws IOException {
 
         Config config = loadConfig("queries.conf");
+        final int partitions = Integer.parseInt(args[0]);
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -357,7 +358,7 @@ public class BatchQueriesDirectoriesRange {
             intersectedCubes.forEach(cube -> sb.append(parquetPath+File.separator+"stIndex").append(File.separator).append(cube).append(","));
             sb.deleteCharAt(sb.length()-1);
             JavaPairRDD<Long, TrajectorySegment> trajectoriesWithIntersectedCubes = (JavaPairRDD<Long, TrajectorySegment>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegment.class, job.getConfiguration());
-            ungroupedResults = queriesIntersectedCubes.join(trajectoriesWithIntersectedCubes).<Tuple2<String, Long>, TrajectorySegment>flatMapToPair(refinementFunction);
+            ungroupedResults = queriesIntersectedCubes.join(trajectoriesWithIntersectedCubes, partitions).<Tuple2<String, Long>, TrajectorySegment>flatMapToPair(refinementFunction);
         }
 
         sb.setLength(0);
@@ -379,7 +380,7 @@ public class BatchQueriesDirectoriesRange {
 
             JavaPairRDD<Tuple2<String, Long>, TrajectorySegment> resultsFullyContained;
             if(indexUtils instanceof IndexUtils2D){
-                resultsFullyContained = ((JavaPairRDD<Long, Tuple2<Long, Tuple2<STPoint, STPoint>>>)queriesFullyContainedCubes).join(trajectoriesWithFullyIntersectedCubes)
+                resultsFullyContained = ((JavaPairRDD<Long, Tuple2<Long, Tuple2<STPoint, STPoint>>>)queriesFullyContainedCubes).join(trajectoriesWithFullyIntersectedCubes, partitions)
                         .<Tuple2<String, Long>, TrajectorySegment>flatMapToPair(f->{
 
                             List<Tuple2<Tuple2<String,Long>,TrajectorySegment>> trajectoryList = new ArrayList<>();
@@ -433,7 +434,7 @@ public class BatchQueriesDirectoriesRange {
                             return trajectoryList.iterator();
                 });
             }else{
-                resultsFullyContained = ((JavaPairRDD<Long,Long>)queriesFullyContainedCubes).join(trajectoriesWithFullyIntersectedCubes).<Tuple2<String, Long>, TrajectorySegment>mapToPair(t->{return Tuple2.apply(Tuple2.apply(t._2._2.getObjectId(), t._2._1), t._2._2);});
+                resultsFullyContained = ((JavaPairRDD<Long,Long>)queriesFullyContainedCubes).join(trajectoriesWithFullyIntersectedCubes, partitions).<Tuple2<String, Long>, TrajectorySegment>mapToPair(t->{return Tuple2.apply(Tuple2.apply(t._2._2.getObjectId(), t._2._1), t._2._2);});
             }
 
             if(ungroupedResults!=null){
@@ -465,6 +466,7 @@ public class BatchQueriesDirectoriesRange {
         bw.write((endTime-startTime) + "\t"+ DataPage.counter);
         bw.close();
 
+        sparkSession.close();
     }
 
     private static int countPoints(String line) {

@@ -376,6 +376,15 @@ public class HilbertUtil {
         return Math.sqrt(Math.pow(px - projX, 2) + Math.pow(py - projY, 2));
     }
 
+    public static double minDistRectangleToRectangle(double x1Min, double y1Min, double x1Max, double y1Max, double x2Min, double y2Min, double x2Max, double y2Max) {
+        double dx = Math.max(0,
+                Math.max(x2Min - x1Max, x1Min - x2Max));
+
+        double dy = Math.max(0,
+                Math.max(y2Min - y1Max, y1Min - y2Max));
+
+        return Math.sqrt(dx * dx + dy * dy);
+    }
 
     public static double minDistPointToRectangle(double px, double py, double xMin, double yMin, double xMax, double yMax) {
         double dx = Math.max(Math.max(xMin - px, 0), px - xMax);

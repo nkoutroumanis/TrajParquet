@@ -319,7 +319,7 @@ public class Frechet3DQueriesDirectories {
         bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
         bw.close();
 
-
+        sparkSession.close();
     }
     private static int countPoints(String line) {
         int count = 0;

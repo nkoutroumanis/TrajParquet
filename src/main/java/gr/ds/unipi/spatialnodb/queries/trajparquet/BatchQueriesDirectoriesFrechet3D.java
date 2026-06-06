@@ -47,6 +47,7 @@ public class BatchQueriesDirectoriesFrechet3D {
     public static void main(String args[]) throws IOException {
 
         Config config = loadConfig("queries.conf");
+        final int partitions = Integer.parseInt(args[0]);
 
         Config dataLoading = config.getConfig("queries");
         final String parquetPath = dataLoading.getString("parquetPath");
@@ -267,7 +268,7 @@ public class BatchQueriesDirectoriesFrechet3D {
 
         JavaPairRDD<Long, TrajectorySegmentWithMetadata> pairRDD = (JavaPairRDD<Long, TrajectorySegmentWithMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegmentWithMetadata.class, jobTrajectorySegments.getConfiguration());
 
-        JavaPairRDD<String, Long> objectIdQueryIdPairs = pairRDD.join(cubeToQueryId).mapToPair((m->{return Tuple2.apply(Tuple2.apply(m._2._1.getTrajectorySegment().getObjectId(), m._2._2), m._2._1.getTrajectorySegment().getSegment());})).groupByKey().filter(f-> {
+        JavaPairRDD<String, Long> objectIdQueryIdPairs = pairRDD.join(cubeToQueryId, partitions).mapToPair((m->{return Tuple2.apply(Tuple2.apply(m._2._1.getTrajectorySegment().getObjectId(), m._2._2), m._2._1.getTrajectorySegment().getSegment());})).groupByKey().filter(f-> {
             List<Long> segsIds = new ArrayList<>((int) f._2.spliterator().getExactSizeIfKnown());
             f._2.forEach(segsIds::add);
 
@@ -301,7 +302,7 @@ public class BatchQueriesDirectoriesFrechet3D {
         ParquetInputFormat.setFilterPredicate(jobWholeTrajectory.getConfiguration(), filterPredicate);
 
         JavaPairRDD<Void, TrajectorySegment> trajectories = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath+File.separator+"idIndex", ParquetInputFormat.class, Void.class, TrajectorySegment.class, jobWholeTrajectory.getConfiguration());
-        JavaPairRDD<Long, Tuple2<TrajectorySegment,TrajectorySegment>> results = trajectories.mapToPair(i-> Tuple2.apply(i._2.getObjectId(), i._2)).join(objectIdQueryIdPairs).mapToPair(i-> Tuple2.apply(i._2._2, i._2._1)).join(trajectoryQueries)
+        JavaPairRDD<Long, Tuple2<TrajectorySegment,TrajectorySegment>> results = trajectories.mapToPair(i-> Tuple2.apply(i._2.getObjectId(), i._2)).join(objectIdQueryIdPairs, partitions).mapToPair(i-> Tuple2.apply(i._2._2, i._2._1)).join(trajectoryQueries, partitions)
 
                 .filter(f->{ if(Double.compare(HilbertUtil.euclideanDistance(f._2._1.getSpatioTemporalPoints()[0].getLongitude(),f._2._1.getSpatioTemporalPoints()[0].getLatitude(),   f._2._2.getSpatioTemporalPoints()[0].getLongitude(),f._2._2.getSpatioTemporalPoints()[0].getLatitude()),epsilon)!=1
                         && Double.compare(HilbertUtil.euclideanDistance(f._2._1.getSpatioTemporalPoints()[f._2._1.getSpatioTemporalPoints().length-1].getLongitude(),f._2._1.getSpatioTemporalPoints()[f._2._1.getSpatioTemporalPoints().length-1].getLatitude(), f._2._2.getSpatioTemporalPoints()[f._2._2.getSpatioTemporalPoints().length-1].getLongitude(),f._2._2.getSpatioTemporalPoints()[f._2._2.getSpatioTemporalPoints().length-1].getLatitude()                      ),epsilon)!=1) {
@@ -318,9 +319,9 @@ public class BatchQueriesDirectoriesFrechet3D {
                 });
 
         System.out.println(results.count());
-        results.collect().forEach(i->{
-            System.out.println(i._1+" - "+i._2._2.getObjectId());
-        });
+//        results.collect().forEach(i->{
+//            System.out.println(i._1+" - "+i._2._2.getObjectId());
+//        });
         long endTime = System.currentTimeMillis();
 
         BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-batch-frechet-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
@@ -328,6 +329,7 @@ public class BatchQueriesDirectoriesFrechet3D {
         bw.write((endTime-startTime) + "\t"+ DataPage.counter);
         bw.close();
 
+        sparkSession.close();
     }
 
     private static int countPoints(String line) {
