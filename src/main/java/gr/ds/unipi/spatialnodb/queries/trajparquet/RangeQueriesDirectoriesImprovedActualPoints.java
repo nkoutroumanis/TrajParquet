@@ -268,7 +268,7 @@ public class RangeQueriesDirectoriesImprovedActualPoints {
                 pairRDDRangeQuery = pairRDDRangeQuery.union(fullyIntersectedPairRDD);
             }
 
-            pairRDDRangeQuery = pairRDDRangeQuery.groupBy(f->f._2.getObjectId()).flatMapToPair(f->{
+            pairRDDRangeQuery = pairRDDRangeQuery.groupBy(f->f._2.getObjectId(), Integer.parseInt(args[0])).flatMapToPair(f->{
 
                         List<TrajectorySegment> trSegments = new ArrayList<>();
                         f._2.forEach(t->trSegments.add(t._2));

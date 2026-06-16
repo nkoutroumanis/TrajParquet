@@ -166,7 +166,7 @@ public class RangeQueriesDirectoriesImproved {
             }
 
             if(sbIntersected.length()==0 && sbFullyCovers.length()==0){
-                bw.write((System.currentTimeMillis()-startTime)+";"+0+";"+0+";"+DataPage.counter);
+                bw.write((System.currentTimeMillis()-startTime)+";"+0+";"+0+";"+DataPage.counter+";"+"false");
                 DataPage.counter = 0;
                 bw.newLine();
                 continue;
@@ -312,7 +312,7 @@ public class RangeQueriesDirectoriesImproved {
                 pairRDDRangeQuery = pairRDDRangeQuery.union(fullyIntersectedPairRDD);
             }
 
-            pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDDRangeQuery.groupBy(f->f._2.getObjectId()).flatMapToPair(f->{
+            pairRDDRangeQuery = (JavaPairRDD<Void, TrajectorySegment>) pairRDDRangeQuery.groupBy(f->f._2.getObjectId(), Integer.parseInt(args[0])).flatMapToPair(f->{
 
                         List<TrajectorySegment> trSegments = new ArrayList<>();
                         f._2.forEach(t->trSegments.add(t._2));
@@ -366,7 +366,7 @@ public class RangeQueriesDirectoriesImproved {
             times.add((endTime - startTime));
             pages.add(DataPage.counter);
 
-            bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter);
+            bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter+";"+"true");
             DataPage.counter = 0;
             bw.newLine();
         }

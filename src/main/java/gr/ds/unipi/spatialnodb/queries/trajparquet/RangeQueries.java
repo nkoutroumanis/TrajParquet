@@ -152,7 +152,7 @@ public class RangeQueries {
                         }
                         return trajectoryList.iterator();
                     })
-                    .groupBy(f->f._2.getObjectId()).flatMapToPair(f->{
+                    .groupBy(f->f._2.getObjectId(), Integer.parseInt(args[0])).flatMapToPair(f->{
 
                         List<TrajectorySegment> trSegments = new ArrayList<>();
                         f._2.forEach(t->trSegments.add(t._2));

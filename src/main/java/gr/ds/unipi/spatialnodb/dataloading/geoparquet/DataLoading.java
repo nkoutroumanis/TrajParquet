@@ -245,7 +245,7 @@ public class DataLoading {
 
             return trajectoryParts.iterator();
 
-        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getMinTimestamp()),t._2);}).sortByKey().mapToPair(f->Tuple2.apply(null, f._2));
+        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getMinTimestamp()),t._2);})/*.sortByKey()*/.repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(Integer.parseInt(args[0]))).mapToPair(f->Tuple2.apply(null, f._2));
 
         rdd.saveAsNewAPIHadoopFile(writePath, Void.class, Trajectory.class, ParquetOutputFormat.class, job.getConfiguration());
 
@@ -257,5 +257,6 @@ public class DataLoading {
             bf.newLine();
             bf.write(String.valueOf((endTime - startTime)/1000));
         }
+        sparkSession.close();
     }
 }

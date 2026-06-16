@@ -462,7 +462,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
 
             return trajectoryParts.iterator();
 
-        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getTrajectorySegment().getMinTimestamp()),t._2);}).repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(1000)).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1.getHilbertKey()+"/", null), f._2));
+        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getTrajectorySegment().getMinTimestamp()),t._2);}).repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(Integer.parseInt(args[0]))).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1.getHilbertKey()+"/", null), f._2));
         segmentedTrajectoriesRDD.saveAsNewAPIHadoopFile(writePath+File.separator+"stIndex", Void.class, TrajectorySegmentWithMetadata.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
 
         long endTime = System.currentTimeMillis();
@@ -503,6 +503,8 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
             bf.newLine();
             bf.write(String.valueOf((endTime - startTime)/1000));
         }
+
+        sparkSession.close();
     }
 
     private static SpatialPoint findMedoid(List<SpatioTemporalPoint> spatioTemporalPoints, double centroidLon,double centroidLat){

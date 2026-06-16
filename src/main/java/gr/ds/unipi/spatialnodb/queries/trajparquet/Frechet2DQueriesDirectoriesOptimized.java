@@ -289,7 +289,7 @@ public class Frechet2DQueriesDirectoriesOptimized {
                 pairRDDRangeQuery = pairRDDRangeQuery.union(fullyContainedPairRDD);
             }
 
-            pairRDDRangeQuery = pairRDDRangeQuery.groupBy(f->f._2.getObjectId())
+            pairRDDRangeQuery = pairRDDRangeQuery.groupBy(f->f._2.getObjectId(), Integer.parseInt(args[0]))
                     .flatMapToPair(f->{
 
                         List<TrajectorySegment> trSegments = new ArrayList<>();
