@@ -12,7 +12,7 @@ public class QueryGeneratorGaussian {
 
     public static void main(String args[]) throws IOException {
 
-        Config config = AppConfig.newAppConfig(/*args[0]*/"src/main/resources/queryGenerator.conf").getConfig();
+        Config config = AppConfig.newAppConfig(/*args[0]*/"src/main/resources/queryGenerator-nari-dynamic.conf").getConfig();
 
         Config dataLoading = config.getConfig("queries");
 

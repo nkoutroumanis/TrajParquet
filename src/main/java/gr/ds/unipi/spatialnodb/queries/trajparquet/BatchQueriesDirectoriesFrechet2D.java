@@ -9,6 +9,10 @@ import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
 import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.pathReadParquet.ParquetInputFormatWithKey;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.column.page.DataPage;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
@@ -48,7 +52,18 @@ public class BatchQueriesDirectoriesFrechet2D {
         final String metricsPath = dataLoading.getString("metricsPath");
         final double epsilon = dataLoading.getDouble("epsilon");
 
-        Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
+        Config metadata;
+        if(parquetPath.startsWith("hdfs://")){
+            Path filePath = new Path(parquetPath, "space.metadata");
+            FileSystem fs = filePath.getFileSystem(new Configuration());
+            try (InputStream in = fs.open(filePath)) {
+                metadata = ConfigFactory.parseReader(
+                        new java.io.InputStreamReader(in)
+                ).resolve().getConfig("gridHilbert");
+            }
+        }else{
+            metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
+        }
         final int bits = metadata.getInt("bits");
         Config boundaries = metadata.getConfig("boundaries");
         final double minLon = boundaries.getDouble("minLon");
@@ -90,10 +105,22 @@ public class BatchQueriesDirectoriesFrechet2D {
 
         Broadcast br =  jsc.broadcast(hilbertCurve);
 
-        File[] directories = new File(parquetPath+ File.separator+"stIndex").listFiles(File::isDirectory);
         Set<String> directoriesSet = new HashSet<>();
-        for (File directory : directories) {
-            directoriesSet.add(directory.getName());
+        if(parquetPath.startsWith("hdfs://")){
+            Path stIndexPath = new Path(parquetPath + "/stIndex");
+            FileSystem fs = stIndexPath.getFileSystem(jobWholeTrajectory.getConfiguration());
+            FileStatus[] statuses = fs.listStatus(stIndexPath);
+
+            for (FileStatus status : statuses) {
+                if (status.isDirectory()) {
+                    directoriesSet.add(status.getPath().getName());
+                }
+            }
+        }else{
+            File[] directories = new File(parquetPath+ File.separator+"stIndex").listFiles(File::isDirectory);
+            for (File directory : directories) {
+                directoriesSet.add(directory.getName());
+            }
         }
 
         Function<String, TrajectorySegment> readTrajectoriesFunction = new Function<String, TrajectorySegment>() {

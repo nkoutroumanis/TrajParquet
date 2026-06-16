@@ -61,7 +61,7 @@ public class ExportWholeTrajectories {
             tuple.sort(comp);
 
             return tuple;
-        }).filter(f->f.size()<=200).takeSample(false, n);
+        })/*.filter(f->f.size()<=200)*/.takeSample(false, n);
 
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(writePath))) {

@@ -5,6 +5,9 @@ import com.typesafe.config.ConfigFactory;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.SparkConf;
@@ -33,13 +36,13 @@ public class KnnQueriesDirectoriesBruteForce {
 
         Config metadata = ConfigFactory.parseFile(new File(parquetPath+ File.separator+"space.metadata")).resolve().getConfig("gridHilbert");
         final int bits = metadata.getInt("bits");
-        Config boundaries = metadata.getConfig("boundaries");
-        final double minLon = boundaries.getDouble("minLon");
-        final double minLat = boundaries.getDouble("minLat");
-        final long minTime = boundaries.getLong("minTime");
-        final double maxLon = boundaries.getDouble("maxLon");
-        final double maxLat = boundaries.getDouble("maxLat");
-        final long maxTime = boundaries.getLong("maxTime");
+//        Config boundaries = metadata.getConfig("boundaries");
+//        final double minLon = boundaries.getDouble("minLon");
+//        final double minLat = boundaries.getDouble("minLat");
+//        final long minTime = boundaries.getLong("minTime");
+//        final double maxLon = boundaries.getDouble("maxLon");
+//        final double maxLat = boundaries.getDouble("maxLat");
+//        final long maxTime = boundaries.getLong("maxTime");
 
         final SmallHilbertCurve hilbertCurve = HilbertCurve.small().bits(bits).dimensions(3);
         final long maxOrdinates = hilbertCurve.maxOrdinate();
@@ -57,10 +60,22 @@ public class KnnQueriesDirectoriesBruteForce {
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
-        File[] directories = new File(parquetPath+File.separator+"stIndex").listFiles(File::isDirectory);
         Set<String> directoriesSet = new HashSet<>();
-        for (File directory : directories) {
-            directoriesSet.add(directory.getName());
+        if(parquetPath.startsWith("hdfs://")){
+            Path stIndexPath = new Path(parquetPath + "/stIndex");
+            FileSystem fs = stIndexPath.getFileSystem(job.getConfiguration());
+            FileStatus[] statuses = fs.listStatus(stIndexPath);
+
+            for (FileStatus status : statuses) {
+                if (status.isDirectory()) {
+                    directoriesSet.add(status.getPath().getName());
+                }
+            }
+        }else{
+            File[] directories = new File(parquetPath+ File.separator+"stIndex").listFiles(File::isDirectory);
+            for (File directory : directories) {
+                directoriesSet.add(directory.getName());
+            }
         }
 
         List<Long> times = new ArrayList<>();

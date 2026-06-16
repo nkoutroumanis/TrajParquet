@@ -9,6 +9,9 @@ import gr.ds.unipi.spatialnodb.hadoop.MultipleParquetOutputsFormat;
 import gr.ds.unipi.spatialnodb.messages.common.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.shapes.STPoint;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -29,6 +32,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -481,10 +485,17 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
 
         );
 
-        try (FileWriter fw = new FileWriter(writePath+ File.separator+"space.metadata")) {
-            fw.write(json);
-        } catch (IOException e) {
-            e.printStackTrace();
+        if(writePath.startsWith("hdfs://")){
+            FileSystem fs = FileSystem.get(job.getConfiguration());
+            try (FSDataOutputStream out = fs.create(new Path(writePath+"/"+"space.metadata"), true)) {
+                out.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+        }else{
+            try (FileWriter fw = new FileWriter(writePath+ File.separator+"space.metadata")) {
+                fw.write(json);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         try(BufferedWriter bf = new BufferedWriter(new FileWriter(metricsPathExport+File.separator+"data-loading-trajparquetDirectoriesWithWholeTrajectories-"+Paths.get(writePath).getFileName().toString()+".txt"))) {

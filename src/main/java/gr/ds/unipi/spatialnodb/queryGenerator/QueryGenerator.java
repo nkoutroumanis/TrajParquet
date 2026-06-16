@@ -1,7 +1,6 @@
 package gr.ds.unipi.spatialnodb.queryGenerator;
 
 import com.typesafe.config.Config;
-import gr.ds.unipi.spatialnodb.AppConfig;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -14,7 +13,7 @@ public class QueryGenerator {
 
     public static void main(String args[]) throws IOException {
 
-        Config config = loadConfig("queryGenerator.conf");
+        Config config = loadConfig("queryGenerator-rome-taxi.conf");
 
         Config dataLoading = config.getConfig("queries");
 
