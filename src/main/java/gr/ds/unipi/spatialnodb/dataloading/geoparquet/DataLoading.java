@@ -86,7 +86,7 @@ public class DataLoading {
         Broadcast smallHilbertCurveBr = jsc.broadcast(hilbertCurve);
         long startTime = System.currentTimeMillis();
 
-        JavaPairRDD<String, List<Tuple3<Double, Double, Long>>> rdd1 = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex])
+        JavaPairRDD<String, List<Tuple3<Double, Double, Long>>> rdd1 = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex], Integer.parseInt(args[0]))
                 .mapToPair(f-> {
                     List<Tuple3<Double, Double, Long>> tuple = new ArrayList<>();
                     for (String[] strings : f._2) {
@@ -245,7 +245,7 @@ public class DataLoading {
 
             return trajectoryParts.iterator();
 
-        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getMinTimestamp()),t._2);})/*.sortByKey()*/.repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(Integer.parseInt(args[0]))).mapToPair(f->Tuple2.apply(null, f._2));
+        }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getMinTimestamp()),t._2);}).sortByKey()/*.repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(Integer.parseInt(args[0])))*/.mapToPair(f->Tuple2.apply(null, f._2));
 
         rdd.saveAsNewAPIHadoopFile(writePath, Void.class, Trajectory.class, ParquetOutputFormat.class, job.getConfiguration());
 

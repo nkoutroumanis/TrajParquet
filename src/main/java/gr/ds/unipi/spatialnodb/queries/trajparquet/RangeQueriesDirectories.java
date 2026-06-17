@@ -2,6 +2,7 @@ package gr.ds.unipi.spatialnodb.queries.trajparquet;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import gr.ds.unipi.spatialnodb.SparkLogParser;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
 import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
@@ -110,10 +111,8 @@ public class RangeQueriesDirectories {
             }
         }
 
-        List<Long> times = new ArrayList<>();
-        List<Integer> pages = new ArrayList<>();
-
         BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"range-queries-directories-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
+        bw.write("Time Exec\tNum of Trajectories\tNum of Points\tIssued\tData Pages\tParse&CubeIndex\n");
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
@@ -145,8 +144,11 @@ public class RangeQueriesDirectories {
                     }
                 }
             });
+            long parseAndCubeIndex = System.currentTimeMillis() - startTime;
+
             if(sb.length()==0){
-                bw.write((System.currentTimeMillis()-startTime)+";"+0+";"+0+";"+DataPage.counter);
+                long endTime = System.currentTimeMillis();
+                bw.write((endTime-startTime)+"\t"+0+"\t"+0+"\t"+"false"+"\t"+DataPage.counter+"\t"+parseAndCubeIndex);
                 DataPage.counter = 0;
                 bw.newLine();
                 continue;
@@ -273,6 +275,7 @@ public class RangeQueriesDirectories {
                     });
 
             List<Tuple2<Void,TrajectorySegment>> trajs = pairRDDRangeQuery.collect();
+            long endTime = System.currentTimeMillis();
             long num = trajs.size();
 
             long numOfPoints = 0;
@@ -281,27 +284,47 @@ public class RangeQueriesDirectories {
 //                    System.out.println(voidTrajectoryTuple2._2.getObjectId()+" "+voidTrajectoryTuple2._2.getSpatioTemporalPoints().length+" "+Arrays.toString(voidTrajectoryTuple2._2.getSpatioTemporalPoints()));
             }
 
-            long endTime = System.currentTimeMillis();
-            times.add((endTime - startTime));
-            pages.add(DataPage.counter);
-
-            bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter);
+            bw.write((endTime - startTime)+"\t"+num+"\t"+numOfPoints+"\t"+"true"+"\t"+DataPage.counter+"\t"+parseAndCubeIndex);
             DataPage.counter = 0;
             bw.newLine();
         }
         bw.close();
         br.close();
 
-        for (int ind = 0; ind < 10; ind++) {
-            times.remove(0);
-            pages.remove(0);
-        }
-        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-directories-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
-        bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\n");
-        bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
-        bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
-        bw.close();
+//        for (int ind = 0; ind < 10; ind++) {
+//            times.remove(0);
+//            pages.remove(0);
+//            parseAndCubeIndexTime.remove(0);
+//        }
+//        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-directories-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
+//        bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\tTotal Parse&CubeIndex (ms)\tAvg Parse&CubeIndex (ms)\n");
+//        bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
+//        bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble() + "\t");
+//        bw.write(parseAndCubeIndexTime.stream().mapToLong(Long::longValue).sum() + "\t"+ parseAndCubeIndexTime.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
+//        bw.close();
+
+        String applicationId = sparkSession.sparkContext().applicationId();
 
         sparkSession.close();
+
+        if(sparkConf.getBoolean("spark.eventLog.enabled",false)){
+            String eventLogDir = sparkConf.get("spark.eventLog.dir");
+            File dir = new File(eventLogDir.replace("file:", ""));
+            File eventLogFile =
+                    Arrays.stream(dir.listFiles())
+                            .filter(File::isFile)
+                            .filter(f -> f.getName().contains(applicationId))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "No event log file found for application " + applicationId));
+
+            List<Long>[] lists = SparkLogParser.getTimeFromTwoStagesPerJob(eventLogFile.getAbsolutePath());
+            try {
+                SparkLogParser.enrichQueryAdHocFile(metricsPath+ File.separator+"range-queries-directories-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt", lists);
+            }catch (Exception e) {
+                e.printStackTrace();
+            }
+            eventLogFile.delete();
+        }
     }
 }

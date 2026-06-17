@@ -1,6 +1,7 @@
 package gr.ds.unipi.spatialnodb.queries.trajparquetold;
 
 import com.typesafe.config.Config;
+import gr.ds.unipi.spatialnodb.SparkLogParser;
 import gr.ds.unipi.spatialnodb.dataloading.HilbertUtil;
 import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquetold.TrajectorySegment;
@@ -37,19 +38,20 @@ public class RangeQueriesActualPoints {
         ParquetInputFormat.setReadSupportClass(job, TrajectorySegmentReadSupport.class);
 
         SparkConf sparkConf = new SparkConf();//.registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class});/*.setMaster("local[1]").set("spark.executor.memory","1g")*/
+        sparkConf.setAppName("Range Querying (with Actual Points) in TrajParquet");
         if (!sparkConf.contains("spark.master")) {
             sparkConf.setMaster("local[*]").set("spark.executor.memory","4g");
         }
         SparkSession sparkSession = SparkSession.builder().config(sparkConf).getOrCreate();
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
 
-        List<Long> times = new ArrayList<>();
-        List<Integer> pages = new ArrayList<>();
-
         BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"range-queries-actualPoints-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
+        bw.write("Time Exec\tNum of Trajectories\tNum of Points\tIssued\tData Pages\tParse\n");
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {
+            long startTime = System.currentTimeMillis();
+
             String[] queryParts = query.split(";");
             double queryMinLongitude = Double.parseDouble(queryParts[0]);
             double queryMinLatitude = Double.parseDouble(queryParts[1]);
@@ -64,7 +66,7 @@ public class RangeQueriesActualPoints {
             FilterPredicate tAxis = and(gtEq(longColumn("maxTimestamp"), queryMinTimestamp), ltEq(longColumn("minTimestamp"), queryMaxTimestamp));
 
             ParquetInputFormat.setFilterPredicate(job.getConfiguration(), and(tAxis, and(xAxis, yAxis)));
-            long startTime = System.currentTimeMillis();
+            long parse = System.currentTimeMillis() - startTime;
 
             JavaPairRDD<Void, TrajectorySegment> pairRDD = (JavaPairRDD<Void, TrajectorySegment>) jsc.newAPIHadoopFile(parquetPath, ParquetInputFormat.class, Void.class, TrajectorySegment.class, job.getConfiguration());
 //            JavaPairRDD<Void, TrajectorySegment> pairRDDRangeQuery = pairRDD;
@@ -142,6 +144,7 @@ public class RangeQueriesActualPoints {
                     });
 
             List<Tuple2<Void,TrajectorySegment>> trajs = pairRDDRangeQuery.collect();
+            long endTime = System.currentTimeMillis();
             long num = trajs.size();
 
             long numOfPoints = 0;
@@ -150,11 +153,7 @@ public class RangeQueriesActualPoints {
 //                System.out.println(voidTrajectoryTuple2._2.getObjectId()+" "+voidTrajectoryTuple2._2.getSpatioTemporalPoints().length+" "+ Arrays.toString(voidTrajectoryTuple2._2.getSpatioTemporalPoints()));
             }
 
-            long endTime = System.currentTimeMillis();
-            times.add((endTime - startTime));
-            pages.add(DataPage.counter);
-
-            bw.write((endTime - startTime)+";"+num+";"+numOfPoints+";"+ DataPage.counter);
+            bw.write((endTime - startTime)+"\t"+num+"\t"+numOfPoints+"\t"+"true"+"\t"+DataPage.counter+"\t"+parse);
             DataPage.counter = 0;
             bw.newLine();
         }
@@ -162,16 +161,38 @@ public class RangeQueriesActualPoints {
         bw.close();
         br.close();
 
-        for (int ind = 0; ind < 10; ind++) {
-            times.remove(0);
-            pages.remove(0);
-        }
-        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-actualPoints-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
-        bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\n");
-        bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
-        bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
-        bw.close();
+//        for (int ind = 0; ind < 10; ind++) {
+//            times.remove(0);
+//            pages.remove(0);
+//        }
+//        bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-range-queries-actualPoints-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
+//        bw.write("Total Time (ms)\tAvg Time (ms)\tTotal Pages\tAvg Pages\n");
+//        bw.write(times.stream().mapToLong(Long::longValue).sum() + "\t"+ times.stream().mapToLong(Long::longValue).average().getAsDouble() + "\t");
+//        bw.write(pages.stream().mapToInt(Integer::intValue).sum() + "\t"+ pages.stream().mapToInt(Integer::intValue).average().getAsDouble());
+//        bw.close();
+
+        String applicationId = sparkSession.sparkContext().applicationId();
 
         sparkSession.close();
+
+        if(sparkConf.getBoolean("spark.eventLog.enabled",false)){
+            String eventLogDir = sparkConf.get("spark.eventLog.dir");
+            File dir = new File(eventLogDir.replace("file:", ""));
+            File eventLogFile =
+                    Arrays.stream(dir.listFiles())
+                            .filter(File::isFile)
+                            .filter(f -> f.getName().contains(applicationId))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "No event log file found for application " + applicationId));
+
+            List<Long>[] lists = SparkLogParser.getTimeFromTwoStagesPerJob(eventLogFile.getAbsolutePath());
+            try {
+                SparkLogParser.enrichQueryAdHocFile(metricsPath+ File.separator+"range-queries-actualPoints-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt", lists);
+            }catch (Exception e) {
+                e.printStackTrace();
+            }
+            eventLogFile.delete();
+        }
     }
 }

@@ -85,7 +85,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
         Broadcast smallHilbertCurveBr = jsc.broadcast(hilbertCurve);
         long startTime = System.currentTimeMillis();
 
-        JavaRDD<TrajectorySegment> trajectoriesRDD = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex]).map(f->{
+        JavaRDD<TrajectorySegment> trajectoriesRDD = jsc.textFile(rawDataPath).map(f->f.split(delimiter)).groupBy(f-> f[objectIdIndex], Integer.parseInt(args[0])).map(f->{
 
             String objectId = ((Tuple2<String, Iterable<String[]>>) f)._1;
             int counter = 0;
