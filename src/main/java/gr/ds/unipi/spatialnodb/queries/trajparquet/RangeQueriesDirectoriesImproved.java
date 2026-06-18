@@ -114,7 +114,7 @@ public class RangeQueriesDirectoriesImproved {
         }
 
         BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"range-queries-directoriesImproved-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
-        bw.write("Time Exec\tNum of Trajectories\tNum of Points\tIssued\tData Pages\tParse&CubeIndex\n");
+        bw.write("Time Exec\tNum of Trajectories\tNum of Points\tIssued\tData Pages\tParse\n");
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
         String query;
         while ((query = br.readLine()) != null) {

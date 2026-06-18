@@ -117,7 +117,7 @@ public class Frechet3DQueriesDirectoriesOptimized {
 
         BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"frechet-queries-optimized-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
         BufferedReader br = new BufferedReader(new FileReader(queriesFilePath));
-        bw.write("Time Exec\tNum of Trajectories\tNum of Points\tIssued\tData Pages\tParse&CubeIndex\n");
+        bw.write("Time Exec\tNum of Trajectories\tNum of Points\tIssued\tData Pages\tParse\n");
         String query;
         while ((query = br.readLine()) != null) {
             long startTime = System.currentTimeMillis();

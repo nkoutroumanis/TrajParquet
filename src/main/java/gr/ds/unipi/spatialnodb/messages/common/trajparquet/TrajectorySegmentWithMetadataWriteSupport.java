@@ -33,6 +33,8 @@ public class TrajectorySegmentWithMetadataWriteSupport extends WriteSupport<Traj
             "required INT64 maxTimestamp;\n" +
             "optional BINARY pivotsLongitude;\n" +
             "optional BINARY pivotsLatitude;\n" +
+            "required INT64 intervalStart;\n" +
+            "required INT64 intervalEnd;\n" +
             "}");
     RecordConsumer recordConsumer;
 
@@ -149,6 +151,14 @@ public class TrajectorySegmentWithMetadataWriteSupport extends WriteSupport<Traj
             recordConsumer.startField("pivotsLatitude", 12);
             recordConsumer.addBinary(Binary.fromConstantByteArray(bPivotlatitude.array()));
             recordConsumer.endField("pivotsLatitude", 12);
+
+//            recordConsumer.startField("intervalStart",13);
+//            recordConsumer.addLong(trajectory);
+//            recordConsumer.endField("intervalStart",13);
+//
+//            recordConsumer.startField("intervalEnd",14);
+//            recordConsumer.addLong(trajectory);
+//            recordConsumer.endField("intervalEnd",14);
 
         }
         recordConsumer.endMessage();
