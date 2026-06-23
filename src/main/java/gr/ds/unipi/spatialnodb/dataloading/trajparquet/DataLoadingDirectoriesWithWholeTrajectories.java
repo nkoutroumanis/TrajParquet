@@ -177,6 +177,8 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
 
             //initialize for the currentHilValue
             int part = 1;
+            long intervalStart = 1;
+            long intervalEnd = 2;
             long[] hil1 = indexUtils.scale(spts[0]);//indexType.equals("3D")?HilbertUtil.scaleGeoTemporalPoint(spts[0].getLongitude(), minLon, maxLon, spts[0].getLatitude(), minLat, maxLat, spts[0].getTimestamp(), minTime, maxTime, maxOrdinates):HilbertUtil.scaleGeoPoint(spts[0].getLongitude(), minLon, maxLon, spts[0].getLatitude(), minLat, maxLat, maxOrdinates);
             Ranges ranges = ((SmallHilbertCurve)smallHilbertCurveBr.getValue()).query(hil1, hil1, 0);
             long currentHilValue = ranges.toList().get(0).low();
@@ -316,7 +318,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                         }
                     }
 
-                    trajectoryParts.add(Tuple2.apply(currentHilValue, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata( new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp), pivots.toArray(new SpatialPoint[0]))));
+                    trajectoryParts.add(Tuple2.apply(currentHilValue, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata( new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp), pivots.toArray(new SpatialPoint[0]), new long[]{intervalStart, intervalEnd-1} )));
                     currentPart.clear();
 
                     Comparator<Tuple2<Long, SpatioTemporalPoint[]>> comparator = Comparator.comparingLong(d-> d._2[0].getTimestamp());
@@ -336,7 +338,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                     passingSegments.sort(comparator);
 
                     for (Tuple2<Long, SpatioTemporalPoint[]> passingSegment : passingSegments) {
-                        trajectoryParts.add(Tuple2.apply(passingSegment._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, passingSegment._2, Math.min(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.min(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[0].getTimestamp(), Math.max(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.max(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[1].getTimestamp()), null)));
+                        trajectoryParts.add(Tuple2.apply(passingSegment._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, passingSegment._2, Math.min(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.min(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[0].getTimestamp(), Math.max(passingSegment._2[0].getLongitude(), passingSegment._2[1].getLongitude()), Math.max(passingSegment._2[0].getLatitude(), passingSegment._2[1].getLatitude()), passingSegment._2[1].getTimestamp()), null, null)));
                     }
 
                     for (int i1 = 1; i1 < passingSegments.size(); i1++) {
@@ -358,9 +360,11 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
 
                     currentHilValue = hilbertValue;
                     hil1 = hil2;
+                    intervalStart = intervalEnd;
                 }else{
                     currentPart.add(new SpatioTemporalPoint(spts[i].getLongitude(), spts[i].getLatitude(),spts[i].getTimestamp()));
                 }
+                intervalEnd++;
             }
 
             //leftovers in the currentPartList
@@ -421,7 +425,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                     }
                 }
 
-                trajectoryParts.add(Tuple2.apply(currentHilValue,TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp), pivots.toArray(new SpatialPoint[0]))));
+                trajectoryParts.add(Tuple2.apply(currentHilValue, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, part++, currentPart.toArray(new SpatioTemporalPoint[0]), minLongitude, minLatitude, minTimestamp, maxLongitude, maxLatitude, maxTimestamp), pivots.toArray(new SpatialPoint[0]), new long[]{intervalStart, intervalEnd-1})));
 
                 currentPart.clear();
             }
@@ -445,7 +449,7 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                 }
             }
 
-            Tuple2<Long,TrajectorySegmentWithMetadata> trjSeg = trajectoryParts.get(trajectoryParts.size()-1);
+            Tuple2<Long, TrajectorySegmentWithMetadata> trjSeg = trajectoryParts.get(trajectoryParts.size()-1);
             List<SpatialPoint> pivots = new ArrayList<>(Arrays.asList(trjSeg._2().getPivots()));
             SpatioTemporalPoint lp = trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints()[trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints().length-1];
             SpatialPoint lastPoint = new SpatialPoint(lp.getLongitude(), lp.getLatitude());
@@ -457,13 +461,86 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                 }
                 pivots.add(lastPoint);
             }
-            Tuple2<Long,TrajectorySegmentWithMetadata> newTrjSeg = new Tuple2<>(trjSeg._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(trjSeg._2.getTrajectorySegment().getObjectId(), -1* trjSeg._2.getTrajectorySegment().getSegment(), trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints(), trjSeg._2.getTrajectorySegment().getMinLongitude(), trjSeg._2.getTrajectorySegment().getMinLatitude(), trjSeg._2.getTrajectorySegment().getMinTimestamp(), trjSeg._2.getTrajectorySegment().getMaxLongitude(), trjSeg._2.getTrajectorySegment().getMaxLatitude(), trjSeg._2.getTrajectorySegment().getMaxTimestamp()), pivots.toArray(new SpatialPoint[0])));
+            Tuple2<Long, TrajectorySegmentWithMetadata> newTrjSeg = new Tuple2<>(trjSeg._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(trjSeg._2.getTrajectorySegment().getObjectId(), -1* trjSeg._2.getTrajectorySegment().getSegment(), trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints(), trjSeg._2.getTrajectorySegment().getMinLongitude(), trjSeg._2.getTrajectorySegment().getMinLatitude(), trjSeg._2.getTrajectorySegment().getMinTimestamp(), trjSeg._2.getTrajectorySegment().getMaxLongitude(), trjSeg._2.getTrajectorySegment().getMaxLatitude(), trjSeg._2.getTrajectorySegment().getMaxTimestamp()), pivots.toArray(new SpatialPoint[0]), new long[]{trjSeg._2.getInterval()[0], trjSeg._2.getInterval()[1]*(-1)}));
             trajectoryParts.set(trajectoryParts.size()-1, newTrjSeg);
 
+//            if(intervalEnd-1!=spts.length){
+//                System.exit(1);
+//            }
+//            for (Tuple2<Long, TrajectorySegmentWithMetadata> trajectoryPart : trajectoryParts) {
+//                if(trajectoryPart._2.getTrajectorySegment().getSegment()>1){
+//                    if(trajectoryPart._2.getTrajectorySegment().getSpatioTemporalPoints().length>2){
+//                        if(!(trajectoryPart._2.getInterval()[1]- trajectoryPart._2.getInterval()[0]+1==trajectoryPart._2.getTrajectorySegment().getSpatioTemporalPoints().length-2)){
+//                            System.exit(1);
+//                        }
+//                    }else{
+//                        if(trajectoryPart._2.getInterval()!=null){
+//                            System.exit(1);
+//                        }
+//                    }
+//                }
+//            }
+//            long y = trajectoryParts.get(0)._2.getInterval()[1];
+//            for (int i = 1; i < trajectoryParts.size(); i++) {
+//                if(trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length>2){
+//                    if(y+1 != trajectoryParts.get(i)._2.getInterval()[0])
+//                    {
+//                        System.out.println(y+" "+trajectoryParts.get(i)._2.getInterval()[0]);
+//                        System.exit(1);
+//                    }
+//                    y=trajectoryParts.get(i)._2.getInterval()[1];
+//                }
+//            }
+//
+//            for (int i = 1; i < trajectoryParts.size()-1; i++) {
+//                if(trajectoryParts.get(i)._2.getTrajectorySegment().getSpatioTemporalPoints().length==2 && trajectoryParts.get(i)._2.getInterval()!=null){
+//                    System.exit(1);
+//                }
+//            }
+//
+////            if(trajectoryParts.get(0)._2.getTrajectorySegment().getSegment()==-1){
+////                System.out.println(trajectoryParts.get(0)._2.getTrajectorySegment());
+////                System.out.println(Arrays.toString(trajectoryParts.get(0)._2.getInterval()));
+////                System.exit(1);
+////            }
+//            for (Tuple2<Long, TrajectorySegmentWithMetadata> trajectoryPart : trajectoryParts) {
+//                if(trajectoryPart._2.getPivots()==null && trajectoryPart._2.getInterval()!=null){
+//                    System.exit(1);
+//                }
+//                if(trajectoryPart._2.getPivots()!=null && trajectoryPart._2.getInterval()==null){
+//                    System.exit(1);
+//                }
+//            }
             return trajectoryParts.iterator();
 
         }).mapToPair((t)->{return Tuple2.apply(new HilbertKeyTimestamp(t._1, t._2.getTrajectorySegment().getMinTimestamp()),t._2);}).repartitionAndSortWithinPartitions(new HilbertKeyPartitioner(Integer.parseInt(args[0]))).mapToPair(f->Tuple2.apply(Tuple2.apply(f._1.getHilbertKey()+"/", null), f._2));
         segmentedTrajectoriesRDD.saveAsNewAPIHadoopFile(writePath+File.separator+"stIndex", Void.class, TrajectorySegmentWithMetadata.class, MultipleParquetOutputsFormat.class, job.getConfiguration());
+
+        Tuple2<Long, Long> stats = ((JavaPairRDD<Tuple2<String, Object>,TrajectorySegmentWithMetadata>)segmentedTrajectoriesRDD).mapToPair(f->{return Tuple2.apply(f._2.getTrajectorySegment().getObjectId(), f._1._1);}).groupByKey().mapValues(f->{
+            HashSet<String> set = new HashSet<>();
+            for (String s : f) {
+                set.add(s);
+            }
+            return set.size();
+        }).values().aggregate(
+                new Tuple2<>(0L, 0L),
+                (acc, v) -> new Tuple2<>(acc._1 + v, acc._2 + 1),
+                (a, b) -> new Tuple2<>(a._1 + b._1, a._2 + b._2)
+        );
+
+        Tuple2<Long, Long> stats1 = trajectoriesRDD.map(f->{
+            HashSet<Long> set = new HashSet<>();
+            for (SpatioTemporalPoint spatioTemporalPoint : f.getSpatioTemporalPoints()) {
+                long[] hil = indexUtils.scale(spatioTemporalPoint);
+                set.add(((SmallHilbertCurve)smallHilbertCurveBr.getValue()).index(hil));
+            }
+            return set.size();
+        }).aggregate(
+                new Tuple2<>(0L, 0L),
+                (acc, v) -> new Tuple2<>(acc._1 + v, acc._2 + 1),
+                (a, b) -> new Tuple2<>(a._1 + b._1, a._2 + b._2)
+        );
+
 
         long endTime = System.currentTimeMillis();
         System.out.println("Exec Time: "+(endTime-startTime));
@@ -476,7 +553,10 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                 .withValue("gridHilbert.boundaries.minTime", ConfigValueFactory.fromAnyRef(minTime))
                 .withValue("gridHilbert.boundaries.maxLon", ConfigValueFactory.fromAnyRef(maxLon))
                 .withValue("gridHilbert.boundaries.maxLat", ConfigValueFactory.fromAnyRef(maxLat))
-                .withValue("gridHilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime));
+                .withValue("gridHilbert.boundaries.maxTime", ConfigValueFactory.fromAnyRef(maxTime))
+                .withValue("gridHilbert.averageIntersectedCellsPerTrajectory", ConfigValueFactory.fromAnyRef((double) stats._1 / stats._2))
+                .withValue("gridHilbert.averageIntersectedCellsPerPointTrajectory", ConfigValueFactory.fromAnyRef((double) stats1._1 / stats1._2))
+                .withValue("gridHilbert.numOfTrajectories", ConfigValueFactory.fromAnyRef(stats._2));
 
         String json = metadataFile.root().render(
                 ConfigRenderOptions.defaults()

@@ -64,7 +64,7 @@ public class BatchQueriesDirectoriesFrechet {
         Job jobTrajectorySegments = Job.getInstance();
 
         ParquetInputFormat.setReadSupportClass(jobWholeTrajectory, TrajectorySegmentReadSupport.class);
-        ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialReadSupport.class);
+        ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialWithPivotMetadataReadSupport.class);
 
         SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class, HilbertUtil.class});
         sparkConf.setAppName("Batch Similarity Querying in TrajParquet");
@@ -208,7 +208,7 @@ public class BatchQueriesDirectoriesFrechet {
         cubes.forEach(cube -> sb.append(parquetPath+File.separator+"stIndex").append(File.separator).append(cube).append(","));
         sb.deleteCharAt(sb.length()-1);
 
-        JavaPairRDD<Long, TrajectorySegmentWithMetadata> pairRDD = (JavaPairRDD<Long, TrajectorySegmentWithMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegmentWithMetadata.class, jobTrajectorySegments.getConfiguration());
+        JavaPairRDD<Long, TrajectorySegmentWithPivotMetadata> pairRDD = (JavaPairRDD<Long, TrajectorySegmentWithPivotMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegmentWithPivotMetadata.class, jobTrajectorySegments.getConfiguration());
 
         JavaPairRDD<String, Long> objectIdQueryIdPairs = pairRDD.join(cubeToQueryId).mapToPair((m->{return Tuple2.apply(Tuple2.apply(m._2._1.getTrajectorySegment().getObjectId(), m._2._2), m._2._1.getTrajectorySegment().getSegment());})).groupByKey().filter(f-> {
             List<Long> segsIds = new ArrayList<>((int) f._2.spliterator().getExactSizeIfKnown());

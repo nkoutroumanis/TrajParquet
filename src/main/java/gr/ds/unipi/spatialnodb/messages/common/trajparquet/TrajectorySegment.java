@@ -49,11 +49,7 @@ public class TrajectorySegment implements Serializable {
     public TrajectorySegment(String objectId, long segment, List<TrajectorySegment> trajectorySegments) {
 
         if(trajectorySegments.size()!=1) {
-
-
             this.objectId = objectId;
-
-//        this.trajectoryId=-1;
             this.segment = segment;
 
             int spatioTemporalPointsNum = trajectorySegments.get(0).getSpatioTemporalPoints().length - 1;
@@ -81,21 +77,9 @@ public class TrajectorySegment implements Serializable {
             }
         }
         else{
-
             this.objectId = objectId;
             this.segment = segment;
             this.spatioTemporalPoints = trajectorySegments.get(0).getSpatioTemporalPoints();
-
-//            for (SpatioTemporalPoint spatioTemporalPoint : spatioTemporalPoints) {
-//                if(spatioTemporalPoint==null){
-//                    try {
-//                        throw new Exception("NULL");
-//                    } catch (Exception e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                }
-//            }
-
         }
 
         this.minLongitude = -1;
@@ -150,7 +134,6 @@ public class TrajectorySegment implements Serializable {
     public String toString() {
         return "TrajectorySegment{" +
                 "objectId='" + objectId + '\'' +
-//                ", trajectoryId=" + trajectoryId +
                 ", segment=" + segment +
                 ", spatioTemporalPoints=" + Arrays.toString(spatioTemporalPoints) +
                 ", minLongitude=" + minLongitude +

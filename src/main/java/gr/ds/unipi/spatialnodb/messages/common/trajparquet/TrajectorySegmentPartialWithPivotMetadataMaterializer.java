@@ -9,7 +9,7 @@ import org.apache.parquet.io.api.*;
 
 import java.nio.ByteBuffer;
 
-public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<TrajectorySegmentWithMetadata> {
+public class TrajectorySegmentPartialWithPivotMetadataMaterializer extends RecordMaterializer<TrajectorySegmentWithPivotMetadata> {
 
     private String objectId;
     private long segment;
@@ -242,10 +242,10 @@ public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<Tra
     };
 
     @Override
-    public TrajectorySegmentWithMetadata getCurrentRecord() {
+    public TrajectorySegmentWithPivotMetadata getCurrentRecord() {
 
         if(pivotsLongitude == null){
-            return TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp),null);
+            return TrajectorySegmentWithPivotMetadata.newTrajectorySegmentWithPivotMetadata(new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp),null);
         }
 
         ByteBuffer pLongitude = ByteBuffer.wrap(pivotsLongitude);
@@ -258,7 +258,7 @@ public class TrajectorySegmentPartialMaterializer extends RecordMaterializer<Tra
 
         pivotsLongitude = null;
         pivotsLatitude = null;
-        return TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp),spatialPoints);
+        return TrajectorySegmentWithPivotMetadata.newTrajectorySegmentWithPivotMetadata(new TrajectorySegment(objectId, segment, null, minLongitude, minLatitude, minTimestamp,maxLongitude, maxLatitude, maxTimestamp),spatialPoints);
     }
 
     @Override

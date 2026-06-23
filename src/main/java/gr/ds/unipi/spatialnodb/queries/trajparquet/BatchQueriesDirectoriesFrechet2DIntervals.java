@@ -7,10 +7,7 @@ import gr.ds.unipi.spatialnodb.messages.common.IndexUtils;
 import gr.ds.unipi.spatialnodb.messages.common.IndexUtils2D;
 import gr.ds.unipi.spatialnodb.messages.common.IndexUtils3D;
 import gr.ds.unipi.spatialnodb.messages.common.SpatioTemporalPoint;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegment;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentPartialWithPivotMetadataReadSupport;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentReadSupport;
-import gr.ds.unipi.spatialnodb.messages.common.trajparquet.TrajectorySegmentWithPivotMetadata;
+import gr.ds.unipi.spatialnodb.messages.common.trajparquet.*;
 import gr.ds.unipi.spatialnodb.messages.common.trajparquet.pathReadParquet.ParquetInputFormatWithKey;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -39,12 +36,10 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import static gr.ds.unipi.spatialnodb.AppConfig.loadConfig;
-import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.doesTrajectoryIntersectWithCube;
-import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.isTrajectoryDistanceLessThanEpsilonToCube;
-import static org.apache.parquet.filter2.predicate.FilterApi.binaryColumn;
-import static org.apache.parquet.filter2.predicate.FilterApi.in;
+import static gr.ds.unipi.spatialnodb.dataloading.HilbertUtil.areTrajectoryPointsDistanceLessThanEpsilonToCube;
+import static org.apache.parquet.filter2.predicate.FilterApi.*;
 
-public class BatchQueriesDirectoriesFrechet3D {
+public class BatchQueriesDirectoriesFrechet2DIntervals {
     public static void main(String args[]) throws IOException {
 
         Config config = loadConfig("queries.conf");
@@ -62,7 +57,7 @@ public class BatchQueriesDirectoriesFrechet3D {
             FileSystem fs = filePath.getFileSystem(new Configuration());
             try (InputStream in = fs.open(filePath)) {
                 metadata = ConfigFactory.parseReader(
-                        new java.io.InputStreamReader(in)
+                        new InputStreamReader(in)
                 ).resolve().getConfig("gridHilbert");
             }
         }else{
@@ -95,7 +90,7 @@ public class BatchQueriesDirectoriesFrechet3D {
         Job jobTrajectorySegments = Job.getInstance();
 
         ParquetInputFormat.setReadSupportClass(jobWholeTrajectory, TrajectorySegmentReadSupport.class);
-        ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialWithPivotMetadataReadSupport.class);
+        ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialWithIntervalMetadataReadSupport.class);
 
         SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class, HilbertUtil.class});
         sparkConf.setAppName("Batch Similarity Querying in TrajParquet");
@@ -197,14 +192,12 @@ public class BatchQueriesDirectoriesFrechet3D {
 
             final double queryMinLongitude = Double.max(minLon,tuple2._2.getMinLongitude()-epsilon);
             final double queryMinLatitude = Double.max(minLat,tuple2._2.getMinLatitude()-epsilon);
-            final long queryMinTimestamp = minTime;
 
             final double queryMaxLongitude = Double.min(maxLon-0.0000001,tuple2._2.getMaxLongitude()+epsilon);
             final double queryMaxLatitude = Double.min(maxLat-0.0000001,tuple2._2.getMaxLatitude()+epsilon);
-            final long queryMaxTimestamp = maxTime-1000;
 
-            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, queryMinTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
-            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, queryMaxTimestamp);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilStart = indexUtils.scale(queryMinLongitude, queryMinLatitude, minTime);//HilbertUtil.scaleGeoTemporalPoint(queryMinLongitude, minLon, maxLon,queryMinLatitude, minLat, maxLat, queryMinTimestamp, minTime, maxTime, maxOrdinates);
+            long[] hilEnd = indexUtils.scale(queryMaxLongitude, queryMaxLatitude, maxTime-1000);//HilbertUtil.scaleGeoTemporalPoint(queryMaxLongitude, minLon, maxLon, queryMaxLatitude, minLat, maxLat, queryMaxTimestamp, minTime, maxTime, maxOrdinates);
             Ranges ranges = hilbertCurveBr.query(hilStart, hilEnd, 0);
 
             List<Tuple2<Long,Long>> trajectoryIdToCubes = new ArrayList<>();
@@ -220,7 +213,7 @@ public class BatchQueriesDirectoriesFrechet3D {
                             double xMax = minLon + ((cube[0]+1) * (maxLon-minLon)/(maxOrdinates+ 1L));
                             double yMax = minLat + ((cube[1]+1) * (maxLat-minLat)/(maxOrdinates+ 1L));
 
-                            if(doesTrajectoryIntersectWithCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax) || isTrajectoryDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)){
+                            if(areTrajectoryPointsDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)){
                                 trajectoryIdToCubes.add(Tuple2.apply(r,tuple2._1));
                             }
                         }
@@ -235,7 +228,7 @@ public class BatchQueriesDirectoriesFrechet3D {
                             double xMax = minLon + ((i + 1) * (maxLon - minLon) / (maxOrdinates + 1L));
                             double yMax = minLat + ((j + 1) * (maxLat - minLat) / (maxOrdinates + 1L));
 
-                            if(doesTrajectoryIntersectWithCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax) || isTrajectoryDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)) {
+                            if(areTrajectoryPointsDistanceLessThanEpsilonToCube(tuple2._2.getSpatioTemporalPoints(), xMin, yMin, xMax, yMax,epsilon)) {
                                 for (long k = hilStart[2]; k <= hilEnd[2]; k++) {
                                     long cubeId = hilbertCurveBr.index(i,j,k);
                                     if(directoriesSet.contains(String.valueOf(cubeId))) {
@@ -284,34 +277,36 @@ public class BatchQueriesDirectoriesFrechet3D {
         JavaPairRDD<Long,TrajectorySegment> trajectoryQueries = jsc.textFile(queriesFilePath).map(readTrajectoriesFunction).zipWithUniqueId().mapToPair(i-> Tuple2.apply(i._2, i._1)).cache();
         JavaPairRDD<Long,Long> cubeToQueryId = trajectoryQueries.<Long,Long>flatMapToPair(cubeToQueryIdsFunction);
 
-
         List<Long> cubes = cubeToQueryId.keys().distinct().collect();
         StringBuilder sb = new StringBuilder();
         cubes.forEach(cube -> sb.append(parquetPath+File.separator+"stIndex").append(File.separator).append(cube).append(","));
         sb.deleteCharAt(sb.length()-1);
 
-        JavaPairRDD<Long, TrajectorySegmentWithPivotMetadata> pairRDD = (JavaPairRDD<Long, TrajectorySegmentWithPivotMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegmentWithPivotMetadata.class, jobTrajectorySegments.getConfiguration());
+        FilterPredicate filterPredicate = notEq(longColumn("intervalStart"), null);
+        ParquetInputFormat.setFilterPredicate(jobTrajectorySegments.getConfiguration(), filterPredicate);
 
-        JavaPairRDD<String, Long> objectIdQueryIdPairs = pairRDD.join(cubeToQueryId, partitions).mapToPair((m->{return Tuple2.apply(Tuple2.apply(m._2._1.getTrajectorySegment().getObjectId(), m._2._2), m._2._1.getTrajectorySegment().getSegment());})).groupByKey().filter(f-> {
-            List<Long> segsIds = new ArrayList<>((int) f._2.spliterator().getExactSizeIfKnown());
-            f._2.forEach(segsIds::add);
+        JavaPairRDD<Long, TrajectorySegmentWithIntervalMetadata> pairRDD = (JavaPairRDD<Long, TrajectorySegmentWithIntervalMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormatWithKey.class, Long.class, TrajectorySegmentWithIntervalMetadata.class, jobTrajectorySegments.getConfiguration());
 
-            segsIds.sort(Comparator.comparingLong(Math::abs));
+        JavaPairRDD<String, Long> objectIdQueryIdPairs = pairRDD.join(cubeToQueryId, partitions).mapToPair((m->{return Tuple2.apply(Tuple2.apply(m._2._1.getTrajectorySegment().getObjectId(), m._2._2), m._2._1.getInterval());})).groupByKey().filter(f-> {
+            List<long[]> intervalIds = new ArrayList<>((int) f._2.spliterator().getExactSizeIfKnown());
+            f._2.forEach(intervalIds::add);
 
-            if (segsIds.size() == 1 && segsIds.get(0) == -1) {
-                return true;
-            }
+            Comparator<long[]> comparator = Comparator.comparingLong(d-> d[0]);
+            intervalIds.sort(comparator);
 
-            long segIndex = 1;
-            for (int seg = 0; seg < segsIds.size() - 1; seg++) {
-                if (segsIds.get(seg) != segIndex++) {
-                    return false;
-                }
-            }
+            if(intervalIds.size()==1 && intervalIds.get(0)[0]==1 && intervalIds.get(0)[1]<0) {return true;}
 
-            if(segsIds.get(segsIds.size()-1)!=segIndex*(-1)){
+            long y;
+            if(intervalIds.get(0)[0]!=1 || intervalIds.get(intervalIds.size()-1)[1]>0){
                 return false;
+            }else{
+                y = intervalIds.get(0)[1];
             }
+            for (int i = 1; i < intervalIds.size()-1; i++) {
+                if(y+1 != intervalIds.get(i)[0]) {return false;}
+                y = intervalIds.get(i)[1];
+            }
+            if(y+1!=intervalIds.get(intervalIds.size()-1)[0]){return false;}
 
             return true;
 
@@ -321,7 +316,7 @@ public class BatchQueriesDirectoriesFrechet3D {
 
         Set<Binary> oIds = new HashSet<>(objectIds.size());
         objectIds.forEach(oId -> oIds.add(Binary.fromString(oId)));
-        FilterPredicate filterPredicate = in(binaryColumn("objectId"), oIds);
+        filterPredicate = in(binaryColumn("objectId"), oIds);
 
         ParquetInputFormat.setFilterPredicate(jobWholeTrajectory.getConfiguration(), filterPredicate);
 
@@ -342,13 +337,13 @@ public class BatchQueriesDirectoriesFrechet3D {
                     }
                 });
 
-        System.out.println(results.count());
+        System.out.println("Counted: "+results.count());
 //        results.collect().forEach(i->{
 //            System.out.println(i._1+" - "+i._2._2.getObjectId());
 //        });
         long endTime = System.currentTimeMillis();
 
-        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-batch-frechet-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(metricsPath+ File.separator+"metrics-batch-frechet-intervals-queries-"+Paths.get(parquetPath).getFileName().toString()+"-"+ Paths.get(queriesFilePath).getFileName().toString().replaceFirst("\\.[^.]+$", "")+".txt"));
         bw.write("Total Time (ms)\tTotal Pages\n");
         bw.write((endTime-startTime) + "\t"+ DataPage.counter);
         bw.close();

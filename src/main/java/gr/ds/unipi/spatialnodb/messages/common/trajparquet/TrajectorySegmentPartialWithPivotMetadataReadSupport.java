@@ -9,7 +9,7 @@ import org.apache.parquet.schema.MessageTypeParser;
 
 import java.util.Map;
 
-public class TrajectorySegmentPartialReadSupport extends ReadSupport<TrajectorySegmentWithMetadata> {
+public class TrajectorySegmentPartialWithPivotMetadataReadSupport extends ReadSupport<TrajectorySegmentWithPivotMetadata> {
 
     @Override
     public ReadContext init(InitContext context){
@@ -30,7 +30,7 @@ public class TrajectorySegmentPartialReadSupport extends ReadSupport<TrajectoryS
     }
 
     @Override
-    public RecordMaterializer<TrajectorySegmentWithMetadata> prepareForRead(Configuration configuration, Map<String, String> map, MessageType messageType, ReadContext readContext) {
-        return new TrajectorySegmentPartialMaterializer();
+    public RecordMaterializer<TrajectorySegmentWithPivotMetadata> prepareForRead(Configuration configuration, Map<String, String> map, MessageType messageType, ReadContext readContext) {
+        return new TrajectorySegmentPartialWithPivotMetadataMaterializer();
     }
 }

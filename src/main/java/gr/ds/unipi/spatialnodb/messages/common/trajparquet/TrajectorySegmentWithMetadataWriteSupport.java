@@ -33,8 +33,8 @@ public class TrajectorySegmentWithMetadataWriteSupport extends WriteSupport<Traj
             "required INT64 maxTimestamp;\n" +
             "optional BINARY pivotsLongitude;\n" +
             "optional BINARY pivotsLatitude;\n" +
-            "required INT64 intervalStart;\n" +
-            "required INT64 intervalEnd;\n" +
+            "optional INT64 intervalStart;\n" +
+            "optional INT64 intervalEnd;\n" +
             "}");
     RecordConsumer recordConsumer;
 
@@ -109,33 +109,6 @@ public class TrajectorySegmentWithMetadataWriteSupport extends WriteSupport<Traj
         recordConsumer.endField("maxTimestamp",10);
 
         if(trajectory.getPivots()!=null) {
-//            if(trajectory.getTrajectorySegment().getSegment()==1) {
-//                if(trajectory.getTrajectorySegment().getSpatioTemporalPoints()[0].getLongitude() != trajectory.getPivots()[trajectory.getPivots().length-1].getLongitude()
-//                || trajectory.getTrajectorySegment().getSpatioTemporalPoints()[0].getLatitude() != trajectory.getPivots()[trajectory.getPivots().length-1].getLatitude()){
-//                    System.exit(1);
-//                }
-//            }else if(trajectory.getTrajectorySegment().getSegment()<-1) {
-//                if(trajectory.getTrajectorySegment().getSpatioTemporalPoints()[trajectory.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLongitude() != trajectory.getPivots()[trajectory.getPivots().length-1].getLongitude()
-//                        || trajectory.getTrajectorySegment().getSpatioTemporalPoints()[trajectory.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLatitude() != trajectory.getPivots()[trajectory.getPivots().length-1].getLatitude()){
-//                    System.exit(1);
-//                }
-//            }else if(trajectory.getTrajectorySegment().getSegment()==-1) {
-//                if(trajectory.getPivots().length==1){
-//                    System.out.println(Arrays.toString(trajectory.getTrajectorySegment().getSpatioTemporalPoints()));
-//                    System.exit(1);
-//                }
-//
-//                if(trajectory.getTrajectorySegment().getSpatioTemporalPoints()[0].getLongitude() != trajectory.getPivots()[trajectory.getPivots().length-2].getLongitude()
-//                        || trajectory.getTrajectorySegment().getSpatioTemporalPoints()[0].getLatitude() != trajectory.getPivots()[trajectory.getPivots().length-2].getLatitude()){
-//                    System.exit(1);
-//                }
-//
-//                if(trajectory.getTrajectorySegment().getSpatioTemporalPoints()[trajectory.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLongitude() != trajectory.getPivots()[trajectory.getPivots().length-1].getLongitude()
-//                        || trajectory.getTrajectorySegment().getSpatioTemporalPoints()[trajectory.getTrajectorySegment().getSpatioTemporalPoints().length-1].getLatitude() != trajectory.getPivots()[trajectory.getPivots().length-1].getLatitude()){
-//                    System.exit(1);
-//                }
-//            }
-
             ByteBuffer bPivotlongitude = ByteBuffer.allocate(trajectory.getPivots().length * 8);
             for (SpatialPoint stPoint : trajectory.getPivots()) {
                 bPivotlongitude.putDouble(stPoint.getLongitude());
@@ -151,16 +124,17 @@ public class TrajectorySegmentWithMetadataWriteSupport extends WriteSupport<Traj
             recordConsumer.startField("pivotsLatitude", 12);
             recordConsumer.addBinary(Binary.fromConstantByteArray(bPivotlatitude.array()));
             recordConsumer.endField("pivotsLatitude", 12);
-
-//            recordConsumer.startField("intervalStart",13);
-//            recordConsumer.addLong(trajectory);
-//            recordConsumer.endField("intervalStart",13);
-//
-//            recordConsumer.startField("intervalEnd",14);
-//            recordConsumer.addLong(trajectory);
-//            recordConsumer.endField("intervalEnd",14);
-
         }
+        if(trajectory.getInterval()!=null){
+            recordConsumer.startField("intervalStart",13);
+            recordConsumer.addLong(trajectory.getInterval()[0]);
+            recordConsumer.endField("intervalStart",13);
+
+            recordConsumer.startField("intervalEnd",14);
+            recordConsumer.addLong(trajectory.getInterval()[1]);
+            recordConsumer.endField("intervalEnd",14);
+        }
+
         recordConsumer.endMessage();
     }
 }

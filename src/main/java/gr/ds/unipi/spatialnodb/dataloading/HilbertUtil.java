@@ -247,6 +247,15 @@ public class HilbertUtil {
         return false;
     }
 
+    public static boolean areTrajectoryPointsDistanceLessThanEpsilonToCube(SpatioTemporalPoint[] spt, double xMin, double yMin, double xMax, double yMax, double epsilon){
+        for (int i = 0; i < spt.length; i++) {
+            if(Double.compare(minDistPointToRectangle(spt[i].getLongitude(), spt[i].getLatitude(), xMin, yMin, xMax, yMax ), epsilon) != 1){
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean doesLineIntersectWithCube(double lineX0, double lineY0, double lineX1, double lineY1,
                                                     double xMin, double yMin, double xMax, double yMax){
         double u1 = 0, u2 = 1;

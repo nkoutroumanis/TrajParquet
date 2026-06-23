@@ -82,7 +82,7 @@ public class Knn3DQueriesDirectories {
         int queriedTrajectoriesCounter = 0;
 
         ParquetInputFormat.setReadSupportClass(jobWholeTrajectory, TrajectorySegmentReadSupport.class);
-        ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialReadSupport.class);
+        ParquetInputFormat.setReadSupportClass(jobTrajectorySegments, TrajectorySegmentPartialWithPivotMetadataReadSupport.class);
 
         SparkConf sparkConf = new SparkConf().registerKryoClasses(new Class[]{SpatioTemporalPoint.class,SpatioTemporalPoint[].class, SpatialPoint.class,SpatialPoint[].class, Double.class});
         sparkConf.setAppName("Knn Querying in TrajParquet");
@@ -232,17 +232,17 @@ public class Knn3DQueriesDirectories {
                 }
             }
 
-            HashMap<String, List<TrajectorySegmentWithMetadata>> identifiedTrajSegments = new HashMap<>();
+            HashMap<String, List<TrajectorySegmentWithPivotMetadata>> identifiedTrajSegments = new HashMap<>();
             HashSet<String> flushedTrajectories = new HashSet<>();
 
             if(sb.length()!=0){
                 sb.deleteCharAt(sb.length()-1);
                 ParquetInputFormat.setFilterPredicate(jobTrajectorySegments.getConfiguration(), tAxis);
-                JavaPairRDD<Void, TrajectorySegmentWithMetadata> pairRDD = (JavaPairRDD<Void, TrajectorySegmentWithMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegmentWithMetadata.class, jobTrajectorySegments.getConfiguration());
+                JavaPairRDD<Void, TrajectorySegmentWithPivotMetadata> pairRDD = (JavaPairRDD<Void, TrajectorySegmentWithPivotMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegmentWithPivotMetadata.class, jobTrajectorySegments.getConfiguration());
                 pairRDD.collect().forEach(seg->{
                     identifiedTrajSegments.compute(seg._2.getTrajectorySegment().getObjectId(), (i, v) -> {
                         if (v == null) {
-                            List<TrajectorySegmentWithMetadata> t = new ArrayList<>();
+                            List<TrajectorySegmentWithPivotMetadata> t = new ArrayList<>();
                             t.add(seg._2);
                             return t;
                         } else {
@@ -309,7 +309,7 @@ public class Knn3DQueriesDirectories {
             while((trajectoryQueue.getSize() < k || queueCells.peek().getScore() < trajectoryQueue.getMaxScore()) && !queueCells.isEmpty()) {
                 if (trajectoryQueue.getSize() == k){
                     identifiedTrajSegments.entrySet().removeIf(e -> {
-                        for (TrajectorySegmentWithMetadata seg : e.getValue()) {
+                        for (TrajectorySegmentWithPivotMetadata seg : e.getValue()) {
 
 //                            if (HilbertUtil.isMinMaxDistGreaterThan(seg.getTrajectorySegment().getMinLongitude(), seg.getTrajectorySegment().getMinLatitude(), seg.getTrajectorySegment().getMaxLongitude(), seg.getTrajectorySegment().getMaxLatitude(), trajectoryQuery, trajectoryQueue.getMaxScore())) {
 //                                return true;
@@ -391,13 +391,13 @@ public class Knn3DQueriesDirectories {
                 if(sb.length()!=0){
                     sb.deleteCharAt(sb.length()-1);
 
-                    JavaPairRDD<Void, TrajectorySegmentWithMetadata> pairRDD = (JavaPairRDD<Void, TrajectorySegmentWithMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegmentWithMetadata.class, jobTrajectorySegments.getConfiguration());
+                    JavaPairRDD<Void, TrajectorySegmentWithPivotMetadata> pairRDD = (JavaPairRDD<Void, TrajectorySegmentWithPivotMetadata>) jsc.newAPIHadoopFile(sb.toString(), ParquetInputFormat.class, Void.class, TrajectorySegmentWithPivotMetadata.class, jobTrajectorySegments.getConfiguration());
 
                     //MBR pruning
                     if(trajectoryQueue.getSize()==k){
                         double l = trajectoryQueue.getMaxScore();
                         pairRDD = pairRDD.filter((tr)->{
-                            TrajectorySegmentWithMetadata seg = tr._2;
+                            TrajectorySegmentWithPivotMetadata seg = tr._2;
 //                            if (HilbertUtil.isMinMaxDistGreaterThan(seg.getTrajectorySegment().getMinLongitude(), seg.getTrajectorySegment().getMinLatitude(), seg.getTrajectorySegment().getMaxLongitude(), seg.getTrajectorySegment().getMaxLatitude(), trajectoryQuery, l)) {
 //                                return false;
 //                            }
@@ -436,7 +436,7 @@ public class Knn3DQueriesDirectories {
                     pairRDD.collect().forEach(seg->{
                         identifiedTrajSegments.compute(seg._2.getTrajectorySegment().getObjectId(), (i, v) -> {
                             if (v == null) {
-                                List<TrajectorySegmentWithMetadata> t = new ArrayList<>();
+                                List<TrajectorySegmentWithPivotMetadata> t = new ArrayList<>();
                                 t.add(seg._2);
                                 return t;
                             } else {
@@ -507,7 +507,7 @@ public class Knn3DQueriesDirectories {
         sparkSession.close();
     }
 
-    private static void flush(HashMap<String, List<TrajectorySegmentWithMetadata>> identifiedTrajectories, HashSet<String> flushedtrajectories){
+    private static void flush(HashMap<String, List<TrajectorySegmentWithPivotMetadata>> identifiedTrajectories, HashSet<String> flushedtrajectories){
         identifiedTrajectories.entrySet().removeIf(e->{
             if(e.getValue().get(0).getTrajectorySegment().getSegment()==-1){
                 flushedtrajectories.add(e.getValue().get(0).getTrajectorySegment().getObjectId());
