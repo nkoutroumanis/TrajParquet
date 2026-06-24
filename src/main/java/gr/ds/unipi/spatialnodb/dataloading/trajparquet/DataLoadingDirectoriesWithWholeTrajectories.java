@@ -274,7 +274,9 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                     double maxLatitude = -Double.MAX_VALUE;
                     long maxTimestamp = Long.MIN_VALUE;
 
-                    for (int j=0; j < currentPart.size(); j++) {
+                    int z=0;
+                    if(part!=1){z=1;}
+                    for (int j=z; j < currentPart.size()-1; j++) {
                         if (Double.compare(minLongitude, currentPart.get(j).getLongitude()) == 1) {
                             minLongitude = currentPart.get(j).getLongitude();
                         }
@@ -295,19 +297,20 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                         }
                     }
 
-                    SpatialPoint medoid = findMedoid(currentPart, (minLongitude + maxLongitude)/2, (minLatitude + maxLatitude)/2);
-                    SpatialPoint fartherFromMedoid = findFartherFrom(currentPart, medoid);
-                    SpatialPoint farther = findFartherFrom(currentPart,fartherFromMedoid);
                     List<SpatialPoint> pivots = new ArrayList<>(3);
+                    if(currentPart.size()>2) {
+                        SpatialPoint medoid = findMedoid(currentPart, (minLongitude + maxLongitude) / 2, (minLatitude + maxLatitude) / 2);
+                        SpatialPoint fartherFromMedoid = findFartherFrom(currentPart, medoid);
+                        SpatialPoint farther = findFartherFrom(currentPart, fartherFromMedoid);
 
-                    pivots.add(medoid);
-                    if(!pivots.contains(fartherFromMedoid)){
-                        pivots.add(fartherFromMedoid);
+                        pivots.add(medoid);
+                        if (!pivots.contains(fartherFromMedoid)) {
+                            pivots.add(fartherFromMedoid);
+                        }
+                        if (!pivots.contains(farther)) {
+                            pivots.add(farther);
+                        }
                     }
-                    if(!pivots.contains(farther)){
-                        pivots.add(farther);
-                    }
-
                     if(part==1){
                         SpatialPoint firstPoint = new SpatialPoint(currentPart.get(0).getLongitude(), currentPart.get(0).getLatitude());
                         if(!pivots.contains(firstPoint)){
@@ -377,7 +380,9 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                 double maxLatitude = -Double.MAX_VALUE;
                 long maxTimestamp = Long.MIN_VALUE;
 
-                for (int j=0; j < currentPart.size(); j++) {
+                int z=0;
+                if(part!=1){z=1;}
+                for (int j=z; j < currentPart.size(); j++) {
                     if (Double.compare(minLongitude, currentPart.get(j).getLongitude()) == 1) {
                         minLongitude = currentPart.get(j).getLongitude();
                     }
@@ -402,18 +407,19 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
                     throw new Exception("There is a trajectory segment containing one point");
                 }
 
-
-                SpatialPoint medoid = findMedoid(currentPart, (minLongitude + maxLongitude)/2, (minLatitude + maxLatitude)/2);
-                SpatialPoint fartherFromMedoid = findFartherFrom(currentPart, medoid);
-                SpatialPoint farther = findFartherFrom(currentPart,fartherFromMedoid);
                 List<SpatialPoint> pivots = new ArrayList<>(3);
+                if(currentPart.size()>2) {
+                    SpatialPoint medoid = findMedoid(currentPart, (minLongitude + maxLongitude) / 2, (minLatitude + maxLatitude) / 2);
+                    SpatialPoint fartherFromMedoid = findFartherFrom(currentPart, medoid);
+                    SpatialPoint farther = findFartherFrom(currentPart, fartherFromMedoid);
 
-                pivots.add(medoid);
-                if(!pivots.contains(fartherFromMedoid)){
-                    pivots.add(fartherFromMedoid);
-                }
-                if(!pivots.contains(farther)){
-                    pivots.add(farther);
+                    pivots.add(medoid);
+                    if (!pivots.contains(fartherFromMedoid)) {
+                        pivots.add(fartherFromMedoid);
+                    }
+                    if (!pivots.contains(farther)) {
+                        pivots.add(farther);
+                    }
                 }
                 if(part==1){
                     SpatialPoint firstPoint = new SpatialPoint(currentPart.get(0).getLongitude(), currentPart.get(0).getLatitude());
@@ -463,6 +469,22 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
             }
             Tuple2<Long, TrajectorySegmentWithMetadata> newTrjSeg = new Tuple2<>(trjSeg._1, TrajectorySegmentWithMetadata.newTrajectorySegmentWithMetadata(new TrajectorySegment(trjSeg._2.getTrajectorySegment().getObjectId(), -1* trjSeg._2.getTrajectorySegment().getSegment(), trjSeg._2.getTrajectorySegment().getSpatioTemporalPoints(), trjSeg._2.getTrajectorySegment().getMinLongitude(), trjSeg._2.getTrajectorySegment().getMinLatitude(), trjSeg._2.getTrajectorySegment().getMinTimestamp(), trjSeg._2.getTrajectorySegment().getMaxLongitude(), trjSeg._2.getTrajectorySegment().getMaxLatitude(), trjSeg._2.getTrajectorySegment().getMaxTimestamp()), pivots.toArray(new SpatialPoint[0]), new long[]{trjSeg._2.getInterval()[0], trjSeg._2.getInterval()[1]*(-1)}));
             trajectoryParts.set(trajectoryParts.size()-1, newTrjSeg);
+
+
+//            if(trajectoryParts.size()==7){
+//            TrajectorySegment t = trajectoryParts.get(6)._2.getTrajectorySegment();
+//            if(t.getSegment()==-7 && t.getSpatioTemporalPoints().length==4){
+//                System.out.println(Arrays.toString(t.getSpatioTemporalPoints()));
+//                System.out.println("mbr: "+ t.getMinLongitude()+" "+ t.getMinLatitude()+" "+t.getMinTimestamp()+ " - "+t.getMaxLongitude()+" "+ t.getMaxLatitude()+" "+t.getMaxTimestamp());
+//                System.exit(1);
+//            }}
+
+//            if(trajectoryParts.get(trajectoryParts.size()-1)._2.getTrajectorySegment().getSegment()<-1 && trajectoryParts.get(trajectoryParts.size()-1)._2.getPivots().length>3){
+//                System.out.println(Arrays.toString(trajectoryParts.get(trajectoryParts.size()-1)._2.getTrajectorySegment().getSpatioTemporalPoints()));
+//                System.out.println("pivots: "+ Arrays.toString(trajectoryParts.get(trajectoryParts.size()-1)._2.getPivots()));
+//                System.exit(1);
+//            }
+
 
 //            if(intervalEnd-1!=spts.length){
 //                System.exit(1);
@@ -590,20 +612,23 @@ public class DataLoadingDirectoriesWithWholeTrajectories {
     private static SpatialPoint findMedoid(List<SpatioTemporalPoint> spatioTemporalPoints, double centroidLon,double centroidLat){
         double minDist = Double.MAX_VALUE;
         SpatioTemporalPoint medoid = null;
-        for (int i = 0; i < spatioTemporalPoints.size(); i++) {
+        for (int i = 1; i < spatioTemporalPoints.size()-1; i++) {
             double distance = HilbertUtil.euclideanDistance(spatioTemporalPoints.get(i).getLongitude(),spatioTemporalPoints.get(i).getLatitude(),centroidLon,centroidLat);
             if (Double.compare(distance,minDist)==-1) {
                 medoid = spatioTemporalPoints.get(i);
                 minDist = distance;
             }
         }
+//        if(medoid==null){
+//            System.out.println("is: "+spatioTemporalPoints.size()+" "+part+" "+spatioTemporalPoints.get(0)+" "+spatioTemporalPoints.get(1)+" ");
+//        }
         return new SpatialPoint(medoid.getLongitude(), medoid.getLatitude());
     }
 
     private static SpatialPoint findFartherFrom(List<SpatioTemporalPoint> spatioTemporalPoints, SpatialPoint spatialPoint){
         double maxDist = -Double.MAX_VALUE;
         SpatioTemporalPoint fartherFrom = null;
-        for (int i = 0; i < spatioTemporalPoints.size(); i++) {
+        for (int i = 1; i < spatioTemporalPoints.size()-1; i++) {
             double distance = HilbertUtil.euclideanDistance(spatioTemporalPoints.get(i).getLongitude(),spatioTemporalPoints.get(i).getLatitude(),spatialPoint.getLongitude(),spatialPoint.getLatitude());
             if (Double.compare(distance,maxDist)==1) {
                 fartherFrom = spatioTemporalPoints.get(i);
